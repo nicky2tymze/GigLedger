@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.1 · 2026-09-24 · DRAFT, for review
+**Version:** 0.2 · 2026-09-24 · DRAFT, for review. 0.2 closes the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -64,13 +64,19 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 
 - **FR-1** Record an offer with pay, stated miles, drops, items, the platform's time estimate, and
   the time it was offered.
-- **FR-2** Record the accept or decline decision and the time of the decision.
+- **FR-2** Record the time an offer was accepted. **Declined offers are not recorded.** The
+  forecast in 5.3 can be run on any offer before deciding, and nothing is kept unless it is accepted.
 - **FR-3** For an accepted offer, record actual elapsed time, actual route miles and return miles.
 - **FR-4** Record a shift with start and end odometer readings and start and end times.
 - **FR-5** Record a charge session with kWh, cost, start and end state of charge, charger, and
-  whether the energy was for work or personal driving.
-- **FR-6** Record a payout: amount, date posted, and which trip or trips it covers. A tip is a
-  payout linked to one trip.
+  whether the energy was for work or personal driving. Every session has a **charge type**: home
+  or DC fast. A home session usually has no receipt, so its cost is its kWh times the home
+  electricity rate, which is stored as data with an effective date, and the cost is graded
+  `derived`.
+- **FR-6** Record a payout: amount, date posted, and which trip or trips it covers. A **tip**
+  belongs to exactly one trip, and its amount is the total for the whole trip. On a trip with two
+  or more drops the platform does not break the tip out by drop, so GigLedger records no per-drop
+  tip and computes nothing that would require one.
 - **FR-7** Every stored number carries its grade (section 3). A value entered by the driver is
   never displayed as measured.
 
@@ -79,7 +85,8 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 - **FR-8** Compute **measured efficiency** (miles per kWh) from two odometer readings and the kWh
   delivered between them.
 - **FR-9** Compute **energy cost per mile** from measured efficiency and the average cost per kWh
-  over a chosen window.
+  over a chosen window, reported three ways: home only, fast only, and the actual blend for the
+  window. Reports show how much of the energy cost came from fast charging.
 - **FR-10** When no measured efficiency exists yet, use a configured default and mark every result
   that depends on it as `derived from default`.
 
@@ -106,7 +113,7 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   the sum of paid route miles.
 - **FR-19** Compute **shift rate** (all pay over all clock time) next to **trip rate** (all pay
   over time spent on trips), and show the gap between them.
-- **FR-20** Summarize a shift: trips, gross, energy cost, net, hours, miles, and offers declined.
+- **FR-20** Summarize a shift: trips, gross, energy cost, net, hours, and miles.
 
 ### 5.6 Reporting and import
 
@@ -170,9 +177,5 @@ computed by hand.
 
 ## 8. Open questions
 
-1. Tip matching: when a platform pays tips in a batch, how is each tip assigned to its trip?
-2. Whether declined offers need the full offer record, or a count is enough.
-3. Whether to model home charging (Level 2) separately from DC fast charging, since the measured
-   22% is a cost of fast charging specifically.
-4. Shared vehicle: charging sessions paid by another driver of the same car need a way to be
-   excluded from business expense.
+None. The last one closed on 2026-09-24: the vehicle is no longer shared, and past shared use was
+already separated by the two drivers' own charging accounts, so no "paid by" field is needed.
