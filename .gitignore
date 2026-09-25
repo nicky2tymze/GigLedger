@@ -1,0 +1,7 @@
+bin/
+obj/
+*.db
+*.db-*
+Docs/*.html
+Docs/*.pdf
+.vs/
