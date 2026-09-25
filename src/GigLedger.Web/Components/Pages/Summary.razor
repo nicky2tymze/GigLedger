@@ -1,9 +1,62 @@
 @page "/shifts/{Id:guid}/summary"
+@inject IShiftService Shifts
 
 <PageTitle>Summary · GigLedger</PageTitle>
 
 <h1>Shift summary</h1>
 
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+@if (summary is not null)
+{
+    <table class="summary">
+        <tr><th>Trips</th><td id="trips">@summary.Trips</td></tr>
+        <tr><th>Gross</th><td id="gross">@Display.Money(summary.Gross)</td></tr>
+        <tr><th>Energy cost</th><td id="energy-cost">@Display.Money(summary.EnergyCost.Value)</td></tr>
+        <tr><th>Net</th><td id="net">@Display.Money(summary.Net.Value)</td></tr>
+        <tr><th>Shift rate (all clock time)</th><td id="shift-rate">@Display.Rate(summary.ShiftRate.Value)</td></tr>
+        <tr><th>Trip rate (time on trips)</th><td id="trip-rate">@(summary.TripRate is { } t ? Display.Rate(t.Value) : "no trips")</td></tr>
+        <tr><th>Gap: charging, repositioning, waiting</th><td id="gap">@(summary.RateGap is { } g ? Display.Rate(g) : "no trips")</td></tr>
+        <tr><th>Clock hours</th><td id="clock-hours">@Display.Hours(summary.ClockHours)</td></tr>
+        <tr><th>Hours on trips</th><td id="trip-hours">@Display.Hours(summary.TripHours)</td></tr>
+        <tr><th>Shift miles (odometer)</th><td id="shift-miles">@Display.Miles(summary.ShiftMiles)</td></tr>
+        <tr><th>Unpaid miles</th><td id="deadhead-miles">@Display.Miles(summary.DeadheadMiles)</td></tr>
+    </table>
+
+    @if (summary.Net.RestsOnDefault)
+    {
+        <p class="hint">Energy cost and net rest on:</p>
+        <ul id="assumptions">
+            @foreach (var a in summary.Net.Assumptions)
+            {
+                <li>@a.Input: @a.Source</li>
+            }
+        </ul>
+    }
+}
+
+<p><a href="/">Back to the shift</a></p>
+
 @code {
     [Parameter] public Guid Id { get; set; }
+
+    private ShiftSummary? summary;
+    private string? error;
+
+    protected override void OnParametersSet()
+    {
+        error = null;
+        summary = null;
+        try
+        {
+            summary = Shifts.Summary(Id);
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
 }

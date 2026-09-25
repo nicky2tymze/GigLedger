@@ -27,3 +27,21 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+/* GigLedger */
+body { font-family: "Segoe UI", system-ui, sans-serif; margin: 0; color: #1b1b1f; background: #fff; }
+nav.top { display: flex; gap: 1.2rem; align-items: center; padding: .8rem 1.2rem; border-bottom: 1px solid #ddd; }
+nav.top a { color: #0b5cad; text-decoration: none; }
+main { max-width: 760px; margin: 0 auto; padding: 1rem 1.2rem 3rem; }
+.form { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: end; }
+.form label { display: flex; flex-direction: column; font-size: .9rem; gap: .2rem; }
+.form input { padding: .35rem .5rem; font-size: 1rem; width: 9rem; }
+button { padding: .45rem .9rem; font-size: 1rem; cursor: pointer; }
+.error { color: #a4161a; font-weight: 600; }
+.hint { color: #555; }
+.grade { font-size: .75rem; color: #666; border: 1px solid #ccc; border-radius: 4px; padding: 0 .3rem; }
+.clears { color: #1b6e20; font-weight: 700; }
+.short { color: #a4161a; font-weight: 700; }
+table { border-collapse: collapse; margin: .6rem 0; }
+td, th { padding: .3rem .7rem; border-bottom: 1px solid #eee; text-align: left; }
+table.summary td { text-align: right; font-variant-numeric: tabular-nums; }

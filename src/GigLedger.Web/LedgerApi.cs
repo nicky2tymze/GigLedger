@@ -30,6 +30,12 @@ public static class LedgerApi
         api.MapGet("/shifts/{id:guid}/summary", (Guid id, IShiftService shifts) =>
             Results.Ok(shifts.Summary(id)));
 
+        api.MapGet("/shifts/open", (IShiftService shifts) =>
+            shifts.Open() is { } open ? Results.Ok(open) : Results.NoContent());
+
+        api.MapGet("/shifts/{id:guid}/trips", (Guid id, ITripService trips) =>
+            Results.Ok(trips.OnShift(id)));
+
         api.MapPost("/shifts/{id:guid}/trips", (Guid id, AcceptOfferRequest request, IOfferService offers) =>
         {
             var trip = offers.Accept(id, request.Offer, request.AcceptedAt);

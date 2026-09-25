@@ -1,5 +1,162 @@
 @page "/"
+@inject IShiftService Shifts
+@inject ITripService Trips
+@inject TimeProvider Clock
 
 <PageTitle>Shift · GigLedger</PageTitle>
 
 <h1>Shift</h1>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+@if (closedShift is not null)
+{
+    <p>Shift ended. <a id="summary" href="@($"/shifts/{closedShift}/summary")">See the summary</a></p>
+}
+
+@if (open is null)
+{
+    <section>
+        <h2>Start a shift</h2>
+        <div class="form">
+            <label>Platform <input id="platform" @bind="platform" /></label>
+            <label>Odometer <input id="start-odometer" type="number" step="0.1" @bind="startOdometer" /></label>
+            <label>Start time <input id="start-time" type="datetime-local" @bind="startTime" /></label>
+            <button id="start-shift" @onclick="Start">Start shift</button>
+        </div>
+    </section>
+}
+else
+{
+    <section>
+        <p>
+            @open.Platform shift open since <strong>@Display.Time(open.StartedAt)</strong>,
+            odometer @Display.Miles(open.StartOdometer.Value) <span class="grade">@open.StartOdometer.Grade</span>
+        </p>
+        <p><a id="evaluate-offer" href="/offer">Evaluate an offer</a></p>
+
+        <h2>Trips</h2>
+        @if (trips.Count == 0)
+        {
+            <p class="hint">No trips yet.</p>
+        }
+        <table>
+            @for (var i = 0; i < trips.Count; i++)
+            {
+                var index = i;
+                var trip = trips[index];
+                <tr class="trip">
+                    <td>@Display.Time(trip.AcceptedAt)</td>
+                    <td>@Display.Money(trip.Offer.Pay.Value) <span class="grade">@trip.Offer.Pay.Grade</span></td>
+                    <td>@Display.Miles(trip.Offer.StatedMiles.Value) stated</td>
+                    @if (trip.Actuals is { } a)
+                    {
+                        <td>@a.ElapsedMinutes.Value min</td>
+                        <td>@Display.Miles(a.RouteMiles.Value) out, @Display.Miles(a.ReturnMiles.Value) back</td>
+                        <td>@Display.PerMile(Calculations.TruePerMile(trip.Offer.Pay.Value, a.Values).Value)</td>
+                        <td>@Display.Share(Calculations.DeadheadShare(a.Values).Value) unpaid</td>
+                    }
+                    else
+                    {
+                        <td colspan="4" class="form">
+                            <input id="@($"minutes-{index}")" type="number" placeholder="minutes" @bind="actuals[index].Minutes" />
+                            <input id="@($"route-{index}")" type="number" step="0.1" placeholder="route mi" @bind="actuals[index].Route" />
+                            <input id="@($"return-{index}")" type="number" step="0.1" placeholder="return mi" @bind="actuals[index].Return" />
+                            <button id="@($"save-actuals-{index}")" @onclick="() => SaveActuals(index)">Save</button>
+                        </td>
+                    }
+                </tr>
+            }
+        </table>
+
+        <h2>End the shift</h2>
+        <div class="form">
+            <label>Odometer <input id="end-odometer" type="number" step="0.1" @bind="endOdometer" /></label>
+            <label>End time <input id="end-time" type="datetime-local" @bind="endTime" /></label>
+            <button id="end-shift" @onclick="End">End shift</button>
+        </div>
+    </section>
+}
+
+@code {
+    private sealed class ActualsInput
+    {
+        public int? Minutes { get; set; }
+        public decimal? Route { get; set; }
+        public decimal? Return { get; set; }
+    }
+
+    private StoredShift? open;
+    private List<StoredTrip> trips = [];
+    private List<ActualsInput> actuals = [];
+    private Guid? closedShift;
+    private string? error;
+
+    private string platform = "Spark";
+    private decimal? startOdometer, endOdometer;
+    private DateTime startTime, endTime;
+
+    protected override void OnInitialized()
+    {
+        startTime = endTime = Clock.GetLocalNow().DateTime;
+        Load();
+    }
+
+    private void Load()
+    {
+        open = Shifts.Open();
+        trips = open is null ? [] : Trips.OnShift(open.Id).ToList();
+        actuals = trips.Select(_ => new ActualsInput()).ToList();
+    }
+
+    private DateTimeOffset Local(DateTime time) => new(time, Clock.LocalTimeZone.GetUtcOffset(time));
+
+    private void Attempt(Action action)
+    {
+        error = null;
+        try
+        {
+            action();
+            Load();
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
+
+    private void Start()
+    {
+        if (startOdometer is null) { error = "Enter the odometer reading."; return; }
+        Attempt(() => Shifts.Start(platform, Local(startTime), new(startOdometer.Value, Grade.Measured)));
+    }
+
+    private void SaveActuals(int index)
+    {
+        var input = actuals[index];
+        if (input.Minutes is null || input.Route is null || input.Return is null)
+        {
+            error = "Enter the minutes, the route miles, and the return miles.";
+            return;
+        }
+        Attempt(() => Trips.RecordActuals(trips[index].Id, new GradedActuals(
+            new(input.Minutes.Value, Grade.Entered),
+            new(input.Route.Value, Grade.Entered),
+            new(input.Return.Value, Grade.Entered))));
+    }
+
+    private void End()
+    {
+        if (open is null) return;
+        if (endOdometer is null) { error = "Enter the odometer reading."; return; }
+        var id = open.Id;
+        Attempt(() =>
+        {
+            Shifts.End(id, Local(endTime), new(endOdometer.Value, Grade.Measured));
+            closedShift = id;
+        });
+    }
+}

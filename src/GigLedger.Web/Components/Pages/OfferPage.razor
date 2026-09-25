@@ -1,5 +1,107 @@
 @page "/offer"
+@inject IOfferService Offers
+@inject IShiftService Shifts
+@inject TimeProvider Clock
+@inject NavigationManager Nav
 
 <PageTitle>Offer · GigLedger</PageTitle>
 
 <h1>Offer</h1>
+<p class="hint">Type in the offer as the platform shows it. Nothing is saved unless you accept.</p>
+
+<div class="form">
+    <label>Pay ($) <input id="pay" type="number" step="0.01" @bind="pay" /></label>
+    <label>Stated miles <input id="stated-miles" type="number" step="0.1" @bind="statedMiles" /></label>
+    <label>Drops <input id="drops" type="number" @bind="drops" /></label>
+    <label>Items <input id="items" type="number" @bind="items" /></label>
+    <label>Their estimate (min) <input id="est-minutes" type="number" @bind="estMinutes" /></label>
+    <label>Return miles, if not the same as stated <input id="return-override" type="number" step="0.1" @bind="returnOverride" /></label>
+    <button id="evaluate" @onclick="Evaluate">Evaluate</button>
+</div>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+@if (evaluation is not null)
+{
+    <section class="result">
+        <p>Forecast net: <strong id="forecast">@Display.Rate(evaluation.Forecast.Value)</strong></p>
+        <p id="verdict" class="@(evaluation.Verdict == Verdict.Clears ? "clears" : "short")">
+            @(evaluation.Verdict == Verdict.Clears ? "Clears" : "Does not clear") @Display.Rate(evaluation.Threshold)
+        </p>
+        @if (evaluation.Forecast.RestsOnDefault)
+        {
+            <p class="hint">This forecast rests on:</p>
+            <ul id="assumptions">
+                @foreach (var a in evaluation.Forecast.Assumptions)
+                {
+                    <li>@a.Input: @a.Source</li>
+                }
+            </ul>
+        }
+        @if (open is not null)
+        {
+            <button id="accept" @onclick="Accept">Accept onto this shift</button>
+        }
+        else
+        {
+            <p id="no-shift" class="hint">No shift is open. <a href="/">Start a shift</a> to accept an offer.</p>
+        }
+    </section>
+}
+
+@code {
+    private decimal? pay, statedMiles, returnOverride;
+    private int drops = 1, items;
+    private int? estMinutes;
+
+    private Core.Offer? offer;
+    private OfferEvaluation? evaluation;
+    private StoredShift? open;
+    private string? error;
+
+    protected override void OnInitialized() => open = Shifts.Open();
+
+    private void Evaluate()
+    {
+        error = null;
+        evaluation = null;
+        if (pay is null || statedMiles is null || estMinutes is null)
+        {
+            error = "Enter the pay, the stated miles, and their time estimate.";
+            return;
+        }
+        try
+        {
+            offer = new Core.Offer(
+                new(pay.Value, Grade.Stated),
+                new(statedMiles.Value, Grade.Stated),
+                drops,
+                items,
+                new(estMinutes.Value, Grade.Stated),
+                Clock.GetLocalNow(),
+                returnOverride);
+            evaluation = Offers.Evaluate(offer);
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
+
+    private void Accept()
+    {
+        if (open is null || offer is null) return;
+        try
+        {
+            Offers.Accept(open.Id, offer, Clock.GetLocalNow());
+            Nav.NavigateTo("/");
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
+}

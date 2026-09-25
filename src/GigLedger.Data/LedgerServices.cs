@@ -87,7 +87,15 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
 
     StoredTrip ITripService.Get(Guid tripId) => ToStored(FindTrip(tripId));
 
-    public IReadOnlyList<StoredTrip> OnShift(Guid shiftId) => throw new NotImplementedException();
+    public IReadOnlyList<StoredTrip> OnShift(Guid shiftId)
+    {
+        FindShift(shiftId);
+        // Ordered in memory: SQLite cannot order by DateTimeOffset in SQL.
+        return db.Trips.Where(t => t.ShiftId == shiftId).AsEnumerable()
+            .OrderBy(t => t.AcceptedAt)
+            .Select(ToStored)
+            .ToList();
+    }
 
     private StoredTrip ToStored(TripRow t)
     {
@@ -111,6 +119,8 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
 
     public Guid Start(string platform, DateTimeOffset startedAt, Graded<decimal> startOdometer)
     {
+        if (Open() is { } open)
+            throw new InvalidOperationException($"Shift {open.Id} is still open; end it before starting another.");
         var row = new ShiftRow
         {
             RecordedAt = clock.GetUtcNow(),
@@ -155,7 +165,11 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
             close is null ? null : new Graded<decimal>(close.EndOdometer, close.EndOdometerGrade));
     }
 
-    public StoredShift? Open() => throw new NotImplementedException();
+    public StoredShift? Open()
+    {
+        var open = db.Shifts.SingleOrDefault(s => !db.ShiftCloses.Any(c => c.ShiftId == s.Id));
+        return open is null ? null : ((IShiftService)this).Get(open.Id);
+    }
 
     public ShiftSummary Summary(Guid shiftId)
     {
