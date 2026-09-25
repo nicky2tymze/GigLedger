@@ -248,8 +248,11 @@ one is corrected: the hand log has been wrong before, and so can the code.
 ### 9.4 Structural tests
 
 - **TC-25a / TC-25b:** updating and deleting a stored trip both throw.
-- **TC-34:** the Web project contains no arithmetic on money: every number it shows comes from Core.
-  Checked by scanning the Web assembly's source for `decimal` operators outside formatting.
+- **TC-34:** the Web project computes nothing: every number it shows comes from Core. Checked by
+  scanning every Web source file, with comments, strings, and markup removed, for multiplication or
+  division, which every rate, cost, and share needs. **It does not see addition or subtraction**, so
+  a sum computed in Web would pass it; the API tests close part of that gap by comparing each
+  response to Core's own result.
 - **TC-NFR5:** no `double` or `float` appears in a Core money path.
 
 Each structural test is first shown to fail on a deliberately planted violation, then the plant is

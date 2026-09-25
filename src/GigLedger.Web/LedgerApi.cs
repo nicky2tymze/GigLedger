@@ -1,9 +1,73 @@
+using GigLedger.Core;
+
 namespace GigLedger.Web;
 
-/// <summary>SDD 7.2: the JSON API, one endpoint per service operation (FR-33).</summary>
+/// <summary>
+/// SDD 7.2: the JSON API, one endpoint per service operation (FR-33). Each handler makes
+/// exactly one service call and returns what it returns; numbers are never touched here.
+/// </summary>
 public static class LedgerApi
 {
     public static void MapLedgerApi(this WebApplication app)
     {
+        var api = app.MapGroup("/api").AddEndpointFilter(RefusalsAsStatusCodes);
+
+        api.MapPost("/offers/evaluate", (Offer offer, IOfferService offers) =>
+            Results.Ok(offers.Evaluate(offer)));
+
+        api.MapPost("/shifts", (StartShiftRequest request, IShiftService shifts) =>
+        {
+            var id = shifts.Start(request.Platform, request.StartedAt, request.StartOdometer);
+            return Results.Created($"/api/shifts/{id}", new Created(id));
+        });
+
+        api.MapPost("/shifts/{id:guid}/end", (Guid id, EndShiftRequest request, IShiftService shifts) =>
+        {
+            shifts.End(id, request.EndedAt, request.EndOdometer);
+            return Results.NoContent();
+        });
+
+        api.MapGet("/shifts/{id:guid}/summary", (Guid id, IShiftService shifts) =>
+            Results.Ok(shifts.Summary(id)));
+
+        api.MapPost("/shifts/{id:guid}/trips", (Guid id, AcceptOfferRequest request, IOfferService offers) =>
+        {
+            var trip = offers.Accept(id, request.Offer, request.AcceptedAt);
+            return Results.Created($"/api/trips/{trip}", new Created(trip));
+        });
+
+        api.MapPost("/trips/{id:guid}/actuals", (Guid id, GradedActuals actuals, ITripService trips) =>
+        {
+            trips.RecordActuals(id, actuals);
+            return Results.NoContent();
+        });
+
+        api.MapGet("/trips/{id:guid}", (Guid id, ITripService trips) =>
+            Results.Ok(trips.Get(id)));
+    }
+
+    /// <summary>
+    /// A refusal from the services becomes a status code with the reason in the body:
+    /// an unknown id is 404, bad input is 400, and a request that conflicts with what is
+    /// already stored (a second close, a summary of an open shift) is 409.
+    /// </summary>
+    private static async ValueTask<object?> RefusalsAsStatusCodes(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        try
+        {
+            return await next(context);
+        }
+        catch (NotFoundException e)
+        {
+            return Results.Problem(e.Message, statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (ArgumentOutOfRangeException e)
+        {
+            return Results.Problem(e.Message, statusCode: StatusCodes.Status400BadRequest);
+        }
+        catch (InvalidOperationException e)
+        {
+            return Results.Problem(e.Message, statusCode: StatusCodes.Status409Conflict);
+        }
     }
 }

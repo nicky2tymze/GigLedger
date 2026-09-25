@@ -174,13 +174,13 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
     // ---- Lookups ----
 
     private ShiftRow FindShift(Guid id) =>
-        db.Shifts.SingleOrDefault(s => s.Id == id) ?? throw new InvalidOperationException($"No shift {id}.");
+        db.Shifts.SingleOrDefault(s => s.Id == id) ?? throw new NotFoundException($"No shift {id}.");
 
     private ShiftCloseRow? FindClose(Guid shiftId) =>
         db.ShiftCloses.SingleOrDefault(c => c.ShiftId == shiftId);
 
     private TripRow FindTrip(Guid id) =>
-        db.Trips.SingleOrDefault(t => t.Id == id) ?? throw new InvalidOperationException($"No trip {id}.");
+        db.Trips.SingleOrDefault(t => t.Id == id) ?? throw new NotFoundException($"No trip {id}.");
 
     private TripActualsRow? FindActuals(Guid tripId) =>
         db.TripActuals.SingleOrDefault(a => a.TripId == tripId);
