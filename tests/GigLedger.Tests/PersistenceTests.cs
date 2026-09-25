@@ -86,9 +86,16 @@ public sealed class PersistenceTests : IDisposable
     }
 
     [Fact]
-    public void FR2_AcceptingOnAnUnknownShiftIsRejected()
+    public void FR2_AcceptingOnAnUnknownShiftIsNotFound()
     {
-        Assert.Throws<InvalidOperationException>(() => _ledger.Accept(Guid.NewGuid(), Run4Offer(), T0));
+        // Not found is its own refusal, so the API can answer 404 rather than 409.
+        Assert.Throws<NotFoundException>(() => _ledger.Accept(Guid.NewGuid(), Run4Offer(), T0));
+    }
+
+    [Fact]
+    public void FR3_AnUnknownTripIsNotFound()
+    {
+        Assert.Throws<NotFoundException>(() => Trips.Get(Guid.NewGuid()));
     }
 
     // ---- FR-3: actuals ----
