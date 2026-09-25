@@ -1,0 +1,9 @@
+@page "/shifts/{Id:guid}/summary"
+
+<PageTitle>Summary · GigLedger</PageTitle>
+
+<h1>Shift summary</h1>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+}

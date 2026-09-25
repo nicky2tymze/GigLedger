@@ -151,6 +151,38 @@ public sealed class PersistenceTests : IDisposable
         Assert.Throws<ArgumentOutOfRangeException>(() => Shifts.End(id, T0.AddMinutes(-1), new(17_010m, Grade.Measured)));
     }
 
+    [Fact]
+    public void FR4_OpenIsTheShiftThatHasNotEnded()
+    {
+        Assert.Null(Shifts.Open());
+        var id = StartedShift();
+        Assert.Equal(id, Shifts.Open()!.Id);
+        Shifts.End(id, T0.AddMinutes(60), new(17_010m, Grade.Measured));
+        Assert.Null(Shifts.Open());
+    }
+
+    [Fact]
+    public void FR4_OnlyOneShiftIsOpenAtATime()
+    {
+        StartedShift();
+        Assert.Throws<InvalidOperationException>(() => StartedShift());
+    }
+
+    [Fact]
+    public void FR1_TripsOnAShiftComeBackInTheOrderAccepted()
+    {
+        var shift = StartedShift();
+        var first = _ledger.Accept(shift, Run4Offer(), T0.AddMinutes(2));
+        var second = _ledger.Accept(shift, Run4Offer() with { Items = 3 }, T0.AddMinutes(70));
+        Assert.Equal([first, second], Trips.OnShift(shift).Select(t => t.Id));
+    }
+
+    [Fact]
+    public void FR1_TripsOnAnUnknownShiftIsNotFound()
+    {
+        Assert.Throws<NotFoundException>(() => Trips.OnShift(Guid.NewGuid()));
+    }
+
     // ---- FR-20 through the service ----
 
     [Fact]

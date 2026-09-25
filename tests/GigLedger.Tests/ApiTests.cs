@@ -174,6 +174,24 @@ public sealed class ApiTests : IDisposable
         Assert.Equal(Run4Actuals, stored.Actuals);
     }
 
+    [Fact]
+    public async Task FR33_OpenShiftIs204WhenNoneAnd200WhenOne()
+    {
+        Assert.Equal(HttpStatusCode.NoContent, (await _http.GetAsync("/api/shifts/open")).StatusCode);
+        var shift = await StartShift();
+        var open = await _http.GetFromJsonAsync<StoredShift>("/api/shifts/open", Json);
+        Assert.Equal(shift, open!.Id);
+    }
+
+    [Fact]
+    public async Task FR33_TripsOnAShift()
+    {
+        var shift = await StartShift();
+        var trip = await AcceptRun4(shift);
+        var trips = await _http.GetFromJsonAsync<List<StoredTrip>>($"/api/shifts/{shift}/trips", Json);
+        Assert.Equal(trip, Assert.Single(trips!).Id);
+    }
+
     // ---- Refusals map to status codes ----
 
     [Fact]

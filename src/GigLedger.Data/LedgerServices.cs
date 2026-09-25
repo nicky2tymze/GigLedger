@@ -87,6 +87,8 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
 
     StoredTrip ITripService.Get(Guid tripId) => ToStored(FindTrip(tripId));
 
+    public IReadOnlyList<StoredTrip> OnShift(Guid shiftId) => throw new NotImplementedException();
+
     private StoredTrip ToStored(TripRow t)
     {
         var offer = new Offer(
@@ -152,6 +154,8 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
             close?.EndedAt,
             close is null ? null : new Graded<decimal>(close.EndOdometer, close.EndOdometerGrade));
     }
+
+    public StoredShift? Open() => throw new NotImplementedException();
 
     public ShiftSummary Summary(Guid shiftId)
     {

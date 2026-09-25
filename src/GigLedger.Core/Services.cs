@@ -48,6 +48,8 @@ public interface ITripService
     /// <summary>Written once, after the trip (FR-3, SDD 5.3).</summary>
     void RecordActuals(Guid tripId, GradedActuals actuals);
     StoredTrip Get(Guid tripId);
+    /// <summary>Every trip accepted on the shift, in the order accepted.</summary>
+    IReadOnlyList<StoredTrip> OnShift(Guid shiftId);
 }
 
 public interface IShiftService
@@ -56,6 +58,8 @@ public interface IShiftService
     /// <summary>Written once, when the shift ends (FR-4, SDD 5.3).</summary>
     void End(Guid shiftId, DateTimeOffset endedAt, Graded<decimal> endOdometer);
     StoredShift Get(Guid shiftId);
+    /// <summary>The shift that has started and not ended, if there is one.</summary>
+    StoredShift? Open();
     /// <summary>FR-18 to FR-20, on the current settings. The shift must be closed.</summary>
     ShiftSummary Summary(Guid shiftId);
 }
