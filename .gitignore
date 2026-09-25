@@ -6,3 +6,4 @@ Docs/*.html
 Docs/*.pdf
 .vs/
 Docs/Production/
+TestResults/

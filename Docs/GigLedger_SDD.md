@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.1 · 2026-09-25 · DRAFT, for review. Designs against SRS 0.2.
+**Version:** 0.2 · 2026-09-25 · DRAFT. Designs against SRS 0.2. 0.2 records the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -269,10 +269,12 @@ removed. A check that cannot fail proves nothing.
 | FR-25 (structure) | 5.3 | TC-25a, TC-25b |
 | NFR-5, NFR-6 | 4.2 | TC-NFR5, persistence |
 
-## 11. Decisions to confirm
+## 11. Decisions
 
-1. **Slice 1 defaults.** The default efficiency and the default energy cost per kWh. They are
-   settings, not code, but Slice 1 needs starting values, and they should come from the log.
-2. **Minutes as the unit of time.** The platform shows minutes. Confirm nothing finer is needed.
-3. **Blazor interactive server** rather than WebAssembly: one process, services injected directly,
-   no separate API client in the browser. The API still exists for the agent client.
+Confirmed by Dominick Trolian, 2026-09-25.
+
+1. **Slice 1 defaults:** efficiency **4.0 mi/kWh** (recent dash readings ran 3.5 to 4.1) and energy
+   cost **$0.69/kWh** (the flat DC fast-charging rate on the charging receipts). Both are settings,
+   and every result that uses them lists them as assumptions until Slice 2 measures them.
+2. **Time is stored in whole minutes,** as the platform shows it.
+3. **Blazor interactive server,** not WebAssembly. The JSON API still serves the agent client.
