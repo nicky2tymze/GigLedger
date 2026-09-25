@@ -206,8 +206,8 @@ public class CalculationTests
     {
         var s = Calculations.SummarizeShift(Synthetic, SyntheticTrips, Defaults);
         Assert.Equal(20.00m, Cents(s.ShiftRate.Value)); // 100 / 5 h
-        Assert.Equal(33.33m, Cents(s.TripRate.Value));  // 100 / 3 h
-        Assert.Equal(13.33m, Cents(s.RateGap));
+        Assert.Equal(33.33m, Cents(s.TripRate!.Value));  // 100 / 3 h
+        Assert.Equal(13.33m, Cents(s.RateGap!.Value));
     }
 
     [Fact]
@@ -240,6 +240,23 @@ public class CalculationTests
         var s = Calculations.SummarizeShift(sunday, trips, Defaults);
         Assert.Equal(147.32m, s.Gross);
         Assert.Equal(35.50m, Cents(s.ShiftRate.Value));
+    }
+
+    [Fact]
+    public void FR19_ShiftWithNoTripsIsAllowed()
+    {
+        // Decided 2026-09-25 (Nick): a shift with no trips can happen. Its shift rate is a
+        // real $0/hr; its trip rate has no value, because there was no trip time to divide by.
+        var idle = new ShiftSpan(ClockMinutes: 90, StartOdometer: 1000m, EndOdometer: 1012m);
+        var s = Calculations.SummarizeShift(idle, [], Defaults);
+        Assert.Equal(0, s.Trips);
+        Assert.Equal(0m, s.Gross);
+        Assert.Equal(0m, s.ShiftRate.Value);
+        Assert.Null(s.TripRate);
+        Assert.Null(s.RateGap);
+        Assert.Equal(0m, s.TripHours);
+        Assert.Equal(12m, s.DeadheadMiles);       // every mile was unpaid
+        Assert.Equal(-2.07m, Cents(s.Net.Value)); // 12 x 0.1725 spent, nothing earned
     }
 
     [Fact]

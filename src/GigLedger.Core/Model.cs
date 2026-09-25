@@ -35,7 +35,7 @@ public sealed record EnergyBasis(decimal MilesPerKwh, decimal PricePerKwh, IRead
         ]);
 }
 
-/// <summary>One shift, summarized (FR-18 to FR-20).</summary>
+/// <summary>One shift, summarized (FR-18 to FR-20). TripRate and RateGap are null when there were no trips.</summary>
 public sealed record ShiftSummary(
     int Trips,
     decimal Gross,
@@ -46,6 +46,6 @@ public sealed record ShiftSummary(
     decimal ShiftMiles,
     decimal DeadheadMiles,
     Result ShiftRate,
-    Result TripRate,
-    decimal RateGap);
+    Result? TripRate,
+    decimal? RateGap);
 
