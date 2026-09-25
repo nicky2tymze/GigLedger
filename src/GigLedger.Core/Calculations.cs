@@ -62,7 +62,8 @@ public static class Calculations
             throw new ArgumentOutOfRangeException(nameof(shift), shift.EndOdometer, "End odometer is below the start reading.");
 
         var clockHours = Hours(shift.ClockMinutes, nameof(shift));
-        var tripHours = Hours(trips.Sum(t => t.Actuals.ElapsedMinutes), nameof(trips));
+        var tripMinutes = trips.Sum(t => t.Actuals.ElapsedMinutes);
+        var tripHours = tripMinutes / 60m;
         var shiftMiles = shift.EndOdometer - shift.StartOdometer;
         var paidRouteMiles = trips.Sum(t => t.Actuals.RouteMiles);
         var gross = trips.Sum(t => t.Pay);
@@ -71,7 +72,8 @@ public static class Calculations
         var energyCost = new Result(costPerMile.Value * shiftMiles, costPerMile.Assumptions);
         var net = new Result(gross - energyCost.Value, costPerMile.Assumptions);
         var shiftRate = new Result(gross / clockHours, []);
-        var tripRate = new Result(gross / tripHours, []);
+        // No trips means no trip time: the trip rate has no value, not a value of zero.
+        Result? tripRate = tripMinutes > 0 ? new Result(gross / tripHours, []) : null;
 
         return new ShiftSummary(
             Trips: trips.Count,
@@ -84,7 +86,7 @@ public static class Calculations
             DeadheadMiles: shiftMiles - paidRouteMiles,
             ShiftRate: shiftRate,
             TripRate: tripRate,
-            RateGap: tripRate.Value - shiftRate.Value);
+            RateGap: tripRate is null ? null : tripRate.Value - shiftRate.Value);
     }
 
     private static decimal Hours(int minutes, string what)
