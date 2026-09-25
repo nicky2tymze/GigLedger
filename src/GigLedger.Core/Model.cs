@@ -28,7 +28,11 @@ public sealed record EnergyBasis(decimal MilesPerKwh, decimal PricePerKwh, IRead
 {
     /// <summary>Slice 1: both figures come from settings, so both are assumptions (FR-10).</summary>
     public static EnergyBasis FromDefaults(decimal defaultMilesPerKwh, decimal defaultPricePerKwh) =>
-        throw new NotImplementedException();
+        new(defaultMilesPerKwh, defaultPricePerKwh,
+        [
+            new Assumption("efficiency", $"default {defaultMilesPerKwh} mi/kWh"),
+            new Assumption("energy price", $"default ${defaultPricePerKwh}/kWh"),
+        ]);
 }
 
 /// <summary>One shift, summarized (FR-18 to FR-20).</summary>
