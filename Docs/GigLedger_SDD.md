@@ -168,6 +168,8 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
 - trip rate = total pay / sum of trip hours
 - the gap = trip rate − shift rate, shown with both
 - summary: trips, gross, energy cost, net, hours, miles
+- **a shift with no trips is allowed** (decided 2026-09-25). Its shift rate is $0/hr; its trip rate
+  and the gap have no value, because there was no trip time to divide by. The screen says so.
 
 ### 6.4 Guards
 
