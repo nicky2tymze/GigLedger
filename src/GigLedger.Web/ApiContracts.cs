@@ -33,3 +33,5 @@ public sealed record BackupResult(string Path);
 
 /// <summary>The one folder backups are written to, from configuration. Callers cannot choose a path.</summary>
 public sealed record BackupFolder(string Path);
+
+public sealed record MileageRateRequest(decimal PerMile);

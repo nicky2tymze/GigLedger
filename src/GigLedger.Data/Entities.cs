@@ -128,3 +128,19 @@ public sealed class AttachmentRow : LedgerRecord
     public byte[] Content { get; set; } = [];
     public string Sha256 { get; set; } = "";
 }
+
+public sealed class MileageRateRow : LedgerRecord
+{
+    public int Year { get; set; }
+    public decimal PerMile { get; set; }
+}
+
+public sealed class PlatformFormRow : LedgerRecord
+{
+    public int Year { get; set; }
+    public string Platform { get; set; } = "";
+    public TaxForm Form { get; set; }
+    public decimal AnnualTotal { get; set; }
+    /// <summary>Twelve amounts, comma separated, invariant culture; null when the form has no months.</summary>
+    public string? Monthly { get; set; }
+}

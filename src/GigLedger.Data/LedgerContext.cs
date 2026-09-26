@@ -16,6 +16,8 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
     public DbSet<DriveRow> Drives => Set<DriveRow>();
     public DbSet<ExpenseRow> Expenses => Set<ExpenseRow>();
     public DbSet<AttachmentRow> Attachments => Set<AttachmentRow>();
+    public DbSet<MileageRateRow> MileageRates => Set<MileageRateRow>();
+    public DbSet<PlatformFormRow> PlatformForms => Set<PlatformFormRow>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder conventions)
     {
@@ -26,6 +28,7 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         conventions.Properties<Core.Purpose>().HaveConversion<string>();
         conventions.Properties<Core.ExpenseCategory>().HaveConversion<string>();
         conventions.Properties<Core.AttachedTo>().HaveConversion<string>();
+        conventions.Properties<Core.TaxForm>().HaveConversion<string>();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
