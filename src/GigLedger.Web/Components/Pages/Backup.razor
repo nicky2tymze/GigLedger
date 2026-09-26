@@ -1,5 +1,24 @@
 @page "/backup"
+@inject IBackupService Backups
+@inject BackupFolder Folder
 
 <PageTitle>Backup · GigLedger</PageTitle>
 
 <h1>Backup</h1>
+<p class="hint">
+    Writes a dated copy of the whole ledger, receipts included, to @Folder.Path.
+    A backup never overwrites an earlier one.
+</p>
+
+<button id="backup-now" @onclick="Run">Back up now</button>
+
+@if (result is not null)
+{
+    <p id="backup-result">Saved @System.IO.Path.GetFileName(result) in @System.IO.Path.GetDirectoryName(result)</p>
+}
+
+@code {
+    private string? result;
+
+    private void Run() => result = Backups.Backup(Folder.Path);
+}

@@ -48,6 +48,9 @@ spec:
           env:
             - name: ConnectionStrings__Ledger
               value: "Data Source=/data/gigledger.db"
+            # On the volume, so backups outlive the pod (NFR-7).
+            - name: Backup__Folder
+              value: "/data/backups"
           volumeMounts:
             - name: data
               mountPath: /data

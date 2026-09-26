@@ -14,7 +14,11 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /app .
 # The ledger lives on a volume, never in the image, so a new image never replaces the data.
+# Backups go on the same volume: inside the image they would be lost with the container. On the
+# same volume they protect against a bad write or a mistake, not against losing the disk; copy
+# them off the machine for that.
 ENV ConnectionStrings__Ledger="Data Source=/data/gigledger.db" \
+    Backup__Folder=/data/backups \
     ASPNETCORE_URLS=http://+:8080
 # Created here and handed to the app user; otherwise Docker creates it owned by root and
 # the first write to the ledger fails.

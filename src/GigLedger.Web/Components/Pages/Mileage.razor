@@ -1,5 +1,139 @@
 @page "/mileage"
+@inject IMileageService Log
+@inject TimeProvider Clock
 
 <PageTitle>Mileage · GigLedger</PageTitle>
 
-<h1>Mileage</h1>
+<h1>Mileage @year</h1>
+<p class="hint">Every drive, with where it went and why. Shifts are logged here automatically when they end.</p>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+<table class="summary">
+    <tr><th>Business</th><td id="business-miles">@Display.Miles(totals.BusinessMiles)</td></tr>
+    <tr><th>Personal</th><td id="personal-miles">@Display.Miles(totals.PersonalMiles)</td></tr>
+</table>
+
+<section>
+    <h2>@(correcting is null ? "Log a drive" : "Correct this drive")</h2>
+    <div class="form">
+        <label>Date <input id="drive-date" type="date" @bind="date" /></label>
+        <label>Start odometer <input id="drive-start" type="number" step="0.1" @bind="start" /></label>
+        <label>End odometer <input id="drive-end" type="number" step="0.1" @bind="end" /></label>
+        <label>Purpose
+            <select id="drive-purpose" @bind="purpose">
+                <option value="@Purpose.Work">Business</option>
+                <option value="@Purpose.Personal">Personal</option>
+            </select>
+        </label>
+        <label>Where and why <input id="drive-description" @bind="description" /></label>
+        @if (correcting is null)
+        {
+            <button id="log-drive" @onclick="LogDrive">Log drive</button>
+        }
+        else
+        {
+            <label>Reason for the correction <input id="correction-reason" @bind="reason" /></label>
+            <button id="save-correction" @onclick="SaveCorrection">Save correction</button>
+            <button @onclick="Clear">Cancel</button>
+        }
+    </div>
+</section>
+
+<table>
+    @for (var i = 0; i < drives.Count; i++)
+    {
+        var index = i;
+        var d = drives[index];
+        <tr class="drive">
+            <td>@d.Drive.Date.ToString("yyyy-MM-dd")</td>
+            <td>@Display.Miles(d.Drive.StartOdometer.Value) to @Display.Miles(d.Drive.EndOdometer.Value)</td>
+            <td>@Display.Miles(RecordKeeping.Miles(d.Drive))</td>
+            <td>@(d.Drive.Purpose == Purpose.Work ? "Business" : "Personal")</td>
+            <td>@d.Drive.Description</td>
+            <td>@(versions[index] > 1 ? "corrected" : "")</td>
+            <td><button id="@($"correct-{index}")" @onclick="() => Edit(index)">Correct</button></td>
+        </tr>
+    }
+</table>
+
+@code {
+    private int year;
+    private List<StoredDrive> drives = [];
+    private List<int> versions = [];
+    private MileageTotals totals = new(0m, 0m);
+    private string? error;
+
+    private DateOnly date;
+    private decimal? start, end;
+    private Purpose purpose = Purpose.Work;
+    private string description = "";
+    private Guid? correcting;
+    private string reason = "";
+
+    protected override void OnInitialized()
+    {
+        var today = DateOnly.FromDateTime(Clock.GetLocalNow().DateTime);
+        year = today.Year;
+        date = today;
+        Load();
+    }
+
+    private void Load()
+    {
+        drives = Log.Year(year).ToList();
+        versions = drives.Select(d => Log.History(d.Id).Count).ToList();
+        totals = Log.Totals(year);
+    }
+
+    private Drive? FromForm()
+    {
+        if (start is null || end is null)
+        {
+            error = "Enter both odometer readings.";
+            return null;
+        }
+        return new Drive(date, new(start.Value, Grade.Measured), new(end.Value, Grade.Measured), purpose, description);
+    }
+
+    private void Attempt(Action action)
+    {
+        error = null;
+        try
+        {
+            action();
+            Clear();
+            Load();
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
+
+    private void LogDrive()
+    {
+        if (FromForm() is { } drive) Attempt(() => Log.Log(drive));
+    }
+
+    private void Edit(int index)
+    {
+        var d = drives[index].Drive;
+        correcting = drives[index].Id;
+        (date, start, end, purpose, description, reason) = (d.Date, d.StartOdometer.Value, d.EndOdometer.Value, d.Purpose, d.Description, "");
+    }
+
+    private void SaveCorrection()
+    {
+        if (correcting is { } id && FromForm() is { } drive) Attempt(() => Log.Correct(id, drive, reason));
+    }
+
+    private void Clear()
+    {
+        correcting = null;
+        (start, end, description, reason) = (null, null, "", "");
+    }
+}

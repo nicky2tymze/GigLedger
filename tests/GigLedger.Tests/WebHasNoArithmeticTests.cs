@@ -11,6 +11,10 @@ namespace GigLedger.Tests;
 ///
 /// What it does not check: addition and subtraction, which a page may legitimately use
 /// (a counter, an index). A sum computed in Web would get past this test.
+///
+/// A known false positive: a C# string nested inside a Razor attribute's quotes, as in
+/// href="@($"/api/attachments/{id}")", is read as code, and "api/attachments" as i / a.
+/// Build such strings in @code, where the scanner reads them as strings.
 /// </summary>
 public partial class WebHasNoArithmeticTests
 {

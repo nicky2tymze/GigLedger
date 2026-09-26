@@ -26,7 +26,7 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 
 ## Status
 
-**Slices 1, 1a, and 2 are complete: the demo core, the container, and measured energy.**
+**Slices 1, 1a, 2, and 3a are complete: the demo core, the container, measured energy, and the record.**
 
 | Requirement | What works |
 |---|---|
@@ -36,7 +36,7 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 | FR-11 to FR-13 | Forecast net $/hr at the accept screen, the $25 verdict, the return estimate |
 | FR-14, FR-15 | Per trip: net $/hr, true $/mile, and unpaid (deadhead) share on the shift screen; every rate in the API's trip report |
 | FR-18 to FR-20 | Shift miles, deadhead miles, shift rate beside trip rate, the shift summary |
-| FR-25 (structure) | Nothing is updated or deleted, enforced by EF and by database triggers |
+| FR-25 | Nothing is updated or deleted, enforced by EF and by database triggers. A correction is a new version with a required reason; the original stays readable in the history. Drives, expenses, trip actuals, and charge sessions are correctable |
 | FR-33, FR-34 | A JSON API over the same services the screens use; the Web project computes nothing |
 | NFR-1, 3, 5, 6 | Tests first; local SQLite, no account; money is `decimal`; ISO dates |
 | NFR-4 | Docker image and a single-replica Kubernetes manifest, run and verified (below) |
@@ -45,12 +45,19 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 | FR-8 | Efficiency measured wall to wheel, with any state-of-charge mismatch named |
 | FR-9, FR-9a | Price per kWh home, fast, and blended, and the fast share of cost; shifts, trips, and offers use the 30 days of charging before them |
 | FR-16 | How far off the platform's time and mileage estimates were, per trip |
+| FR-26, FR-26a | The mileage log: every drive with where and why; a shift's span is logged as business when it ends |
+| FR-27 | Receipts stored in the database with a SHA-256 that detects a changed file |
+| FR-28 | Business expenses by category |
+| NFR-7 | Dated backups of the whole ledger that never overwrite each other |
 
 **Deferred, not built yet.** Nothing below is shown as working anywhere in the app.
 
 | Slice | Requirements |
 |---|---|
-| 3. The record | FR-21 to FR-24 reports, imports, exports; FR-25 correction screens; FR-26 mileage log; FR-27 receipts; FR-28 expenses; FR-29 to FR-31 tax summary and reconciliation; FR-32 full export; NFR-7 backup |
+| 3b. Tax and reports | FR-21 reports by range, FR-24 export to CSV, FR-29 to FR-31 annual tax summary, mileage rate by year, and 1099 reconciliation, FR-32 full export |
+| 3c. Imports | FR-22 charging receipts and FR-23 platform earnings from CSV. Waiting on a real export file from each; no importer is written against a guessed format |
+
+Expense and charge corrections are available through the API; the screens correct drives only so far.
 
 Energy cost now comes from the last 30 days of charging. Where that window is too thin to measure,
 the settings (4.0 mi/kWh, $0.69/kWh) stand in, and every number that uses them says so. The home
@@ -93,6 +100,9 @@ docker run -p 8080:8080 -v gigledger-data:/data gigledger:local
 ```
 
 The ledger lives on the `/data` volume, never in the image, and the app runs as a non-root user.
+Backups go to `/data/backups` on the same volume. That protects against a bad write or a mistake,
+not against losing the disk: copy them off the machine for that. The container's clock is UTC, so
+backup file names are stamped in UTC.
 
 ### On Kubernetes
 

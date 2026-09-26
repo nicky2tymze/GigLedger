@@ -77,6 +77,8 @@ public static class LedgerApi
             settings.SetHomeRate(request.PerKwh, request.EffectiveFrom);
             return Results.NoContent();
         });
+
+        api.MapRecordApi();
     }
 
     /// <summary>

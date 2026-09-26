@@ -1,5 +1,120 @@
 @page "/expenses"
+@inject IExpenseService Ledger
+@inject IAttachmentService Receipts
+@inject TimeProvider Clock
 
 <PageTitle>Expenses · GigLedger</PageTitle>
 
-<h1>Expenses</h1>
+<h1>Expenses @year</h1>
+<p class="hint">Business expenses beyond charging. Attach the receipt; it is stored with the record and checked against its hash.</p>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+<div class="form">
+    <label>Date <input id="expense-date" type="date" @bind="date" /></label>
+    <label>Category
+        <select id="expense-category" @bind="category">
+            @foreach (var c in Enum.GetValues<ExpenseCategory>())
+            {
+                <option value="@c">@c</option>
+            }
+        </select>
+    </label>
+    <label>Amount ($) <input id="expense-amount" type="number" step="0.01" @bind="amount" /></label>
+    <label>What for <input id="expense-description" @bind="description" /></label>
+    <button id="record-expense" @onclick="Record">Record</button>
+</div>
+
+<table>
+    @for (var i = 0; i < expenses.Count; i++)
+    {
+        var index = i;
+        var e = expenses[index];
+        <tr class="expense">
+            <td>@e.Expense.Date.ToString("yyyy-MM-dd")</td>
+            <td>@e.Expense.Category</td>
+            <td>@Display.Money(e.Expense.Amount.Value)</td>
+            <td>@e.Expense.Description</td>
+            <td>
+                @foreach (var r in receipts[index])
+                {
+                    <a href="@ReceiptUrl(r.Id)">@r.FileName</a>
+                }
+            </td>
+            <td><InputFile id="@($"attach-{index}")" OnChange="args => Attach(index, args)" /></td>
+        </tr>
+    }
+</table>
+
+@code {
+    // A receipt larger than 10 MB is refused (10,485,760 bytes, written out: Web does no arithmetic).
+    private const long MaxReceiptBytes = 10_485_760;
+
+    // Built here rather than inline in the href: a C# string nested inside an attribute's quotes
+    // reads to TC-34's scanner as the path "api/attachments", i.e. i / a.
+    private static string ReceiptUrl(Guid id) => $"/api/attachments/{id}";
+
+    private int year;
+    private List<StoredExpense> expenses = [];
+    private List<IReadOnlyList<AttachmentInfo>> receipts = [];
+    private string? error;
+
+    private DateOnly date;
+    private ExpenseCategory category = ExpenseCategory.Supplies;
+    private decimal? amount;
+    private string description = "";
+
+    protected override void OnInitialized()
+    {
+        var today = DateOnly.FromDateTime(Clock.GetLocalNow().DateTime);
+        year = today.Year;
+        date = today;
+        Load();
+    }
+
+    private void Load()
+    {
+        expenses = Ledger.Year(year).ToList();
+        receipts = expenses.Select(e => Receipts.For(AttachedTo.Expense, e.Id)).ToList();
+    }
+
+    private void Record()
+    {
+        error = null;
+        if (amount is null) { error = "Enter the amount."; return; }
+        try
+        {
+            Ledger.Record(new Expense(date, category, new(amount.Value, Grade.Measured), description));
+            (amount, description) = (null, "");
+            Load();
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
+
+    private async Task Attach(int index, InputFileChangeEventArgs args)
+    {
+        error = null;
+        try
+        {
+            using var stream = args.File.OpenReadStream(MaxReceiptBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            Receipts.Attach(AttachedTo.Expense, expenses[index].Id, args.File.Name, args.File.ContentType, buffer.ToArray());
+            Load();
+        }
+        catch (IOException)
+        {
+            error = "That file is over the 10 MB limit.";
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
+}
