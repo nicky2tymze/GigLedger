@@ -66,6 +66,9 @@ public static class LedgerApi
             return Results.Created($"/api/charges/{id}", new Created(id));
         });
 
+        api.MapGet("/charges", (DateTimeOffset from, DateTimeOffset to, IChargeService charges) =>
+            Results.Ok(charges.Between(from, to)));
+
         api.MapPost("/charges/import", async (HttpRequest request, IChargeService charges) =>
         {
             using var body = new StreamReader(request.Body);
