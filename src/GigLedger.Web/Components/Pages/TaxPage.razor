@@ -1,5 +1,165 @@
 @page "/tax"
+@using System.Globalization
+@inject ITaxService Taxes
+@inject TimeProvider Clock
 
 <PageTitle>Taxes · GigLedger</PageTitle>
 
-<h1>Taxes</h1>
+<h1>Taxes @year</h1>
+<p class="hint">
+    Both deduction methods, side by side. GigLedger shows both and chooses neither. The way they are
+    split here is GigLedger's reading of the IRS rules: confirm the method with your tax preparer
+    before relying on it.
+</p>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+<section>
+    <h2>Standard mileage rate for @year</h2>
+    <p>@(summary.Rate is { } r ? $"{Display.PerMile(r.PerMile)}, as entered" : "Not entered. Enter the published IRS rate for the year.")</p>
+    <div class="form">
+        <label>Rate ($/mile) <input id="mileage-rate" type="number" step="0.001" @bind="rate" /></label>
+        <button id="set-mileage-rate" @onclick="SetRate">Set rate</button>
+    </div>
+</section>
+
+<section>
+    <h2>The year</h2>
+    <table class="summary">
+        @foreach (var (platform, gross) in summary.GrossByPlatform)
+        {
+            <tr><th>Gross from @platform</th><td>@Display.Money(gross)</td></tr>
+        }
+        <tr><th>Business miles</th><td>@Display.Miles(summary.Miles.BusinessMiles)</td></tr>
+        <tr><th>Personal miles</th><td>@Display.Miles(summary.Miles.PersonalMiles)</td></tr>
+        <tr><th>Business share</th><td>@(summary.BusinessShare is { } s ? Display.Share(s.Value) : "no miles logged")</td></tr>
+        <tr><th>Charging, all sessions</th><td>@Display.Money(summary.ChargingCost.Value)</td></tr>
+        @foreach (var (category, spent) in summary.ExpensesByCategory.Where(e => e.Value != 0))
+        {
+            <tr><th>@category</th><td>@Display.Money(spent)</td></tr>
+        }
+    </table>
+</section>
+
+<section>
+    <h2>Deduction methods</h2>
+    <table class="summary">
+        <tr><th></th><th>Standard mileage</th><th>Actual expenses</th></tr>
+        <tr>
+            <th>Vehicle</th>
+            <td>@(summary.StandardMileage.Vehicle is { } sv ? Display.Money(sv.Value) : "rate not entered")</td>
+            <td>@(summary.ActualExpenses.Vehicle is { } av ? Display.Money(av.Value) : "no miles logged")</td>
+        </tr>
+        <tr>
+            <th>Parking and tolls</th>
+            <td>@Display.Money(summary.StandardMileage.ParkingAndTolls)</td>
+            <td>@Display.Money(summary.ActualExpenses.ParkingAndTolls)</td>
+        </tr>
+        <tr>
+            <th>Total</th>
+            <td id="standard-total">@(summary.StandardMileage.Total is { } st ? Display.Money(st.Value) : "rate not entered")</td>
+            <td id="actual-total">@(summary.ActualExpenses.Total is { } at ? Display.Money(at.Value) : "no miles logged")</td>
+        </tr>
+    </table>
+    <p>Phone, supplies, and other business expenses, the same under either method: @Display.Money(summary.OtherBusinessExpenses)</p>
+    @if (summary.ActualExpenses.Total is { RestsOnDefault: true } t)
+    {
+        <ul>
+            @foreach (var a in t.Assumptions)
+            {
+                <li>@a.Input: @a.Source</li>
+            }
+        </ul>
+    }
+</section>
+
+<section>
+    <h2>Platform tax form</h2>
+    <div class="form">
+        <label>Platform <input id="form-platform" @bind="platform" /></label>
+        <label>Form
+            <select id="form-kind" @bind="form">
+                <option value="@TaxForm.Form1099Nec">1099-NEC</option>
+                <option value="@TaxForm.Form1099K">1099-K</option>
+            </select>
+        </label>
+        <label>Annual total ($) <input id="form-annual" type="number" step="0.01" @bind="annual" /></label>
+        <label>1099-K months, Jan to Dec, commas <input id="form-monthly" @bind="monthly" /></label>
+        <button id="record-form" @onclick="RecordForm">Record form</button>
+    </div>
+    @if (reconciliation is { } rc)
+    {
+        <p id="reconciliation">
+            Ledger @Display.Money(rc.Recorded), form @Display.Money(rc.Reported):
+            @(rc.Difference == 0 ? "they agree." : $"the form shows {Display.Money(rc.Difference)} more than the ledger.")
+        </p>
+        @if (rc.Months is { } months)
+        {
+            <ul>
+                @foreach (var m in months.Where(m => m.Difference != 0))
+                {
+                    <li>Month @m.Month: ledger @Display.Money(m.Recorded), form @Display.Money(m.Reported)</li>
+                }
+            </ul>
+        }
+    }
+</section>
+
+@code {
+    private int year;
+    private TaxSummary summary = null!;
+    private Reconciliation? reconciliation;
+    private string? error;
+
+    private decimal? rate, annual;
+    private string platform = "Spark";
+    private TaxForm form = TaxForm.Form1099Nec;
+    private string monthly = "";
+
+    protected override void OnInitialized()
+    {
+        year = Clock.GetLocalNow().Year;
+        Load();
+    }
+
+    private void Load()
+    {
+        summary = Taxes.Summary(year);
+        reconciliation = Taxes.Reconcile(year, platform);
+    }
+
+    private void Attempt(Action action)
+    {
+        error = null;
+        try
+        {
+            action();
+            Load();
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e) || e is FormatException)
+        {
+            error = e is FormatException ? "The months must be twelve amounts separated by commas." : Refusal.Reason(e);
+        }
+    }
+
+    private void SetRate()
+    {
+        if (rate is null) { error = "Enter the rate."; return; }
+        Attempt(() => Taxes.SetMileageRate(year, rate.Value));
+    }
+
+    private void RecordForm()
+    {
+        if (annual is null) { error = "Enter the annual total from the form."; return; }
+        Attempt(() =>
+        {
+            var months = string.IsNullOrWhiteSpace(monthly)
+                ? null
+                : monthly.Split(',').Select(m => decimal.Parse(m.Trim(), CultureInfo.InvariantCulture)).ToList();
+            Taxes.RecordForm(new PlatformForm(year, platform, form, annual.Value, months));
+        });
+    }
+}

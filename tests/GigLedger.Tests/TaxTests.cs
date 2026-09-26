@@ -198,6 +198,25 @@ public sealed class TaxTests : TestContext
     }
 
     [Fact]
+    public void FR25_SettingsTwiceInOneInstant_TheSecondApplies()
+    {
+        // Written after the fix, found through FR30 above: "latest timestamp" ties in one instant.
+        var settings = (ISettingsService)_ledger;
+        settings.Set(new Settings(26m, 4.0m, 0.69m));
+        settings.Set(new Settings(27m, 4.0m, 0.69m));
+        Assert.Equal(27m, settings.Get().AcceptThreshold);
+    }
+
+    [Fact]
+    public void FR5_AHomeRateReenteredForTheSameDate_TheSecondApplies()
+    {
+        var settings = (ISettingsService)_ledger;
+        settings.SetHomeRate(0.13m, new DateOnly(2026, 9, 1));
+        settings.SetHomeRate(0.14m, new DateOnly(2026, 9, 1));
+        Assert.Equal(0.14m, settings.HomeRateOn(new DateOnly(2026, 9, 25)).PerKwh);
+    }
+
+    [Fact]
     public void FR31_NoFormNoReconciliation_ThenTheFormAgainstTheLedger()
     {
         SparkTrip(Now, 34.89m);

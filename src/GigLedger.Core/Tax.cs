@@ -41,9 +41,27 @@ public sealed record Reconciliation(
 
 public static class Tax
 {
-    public static void Validate(MileageRate rate) => throw new NotImplementedException();
+    public static void Validate(MileageRate rate)
+    {
+        if (rate.PerMile <= 0)
+            throw new ArgumentOutOfRangeException(nameof(rate), rate.PerMile, "A mileage rate must be positive.");
+    }
 
-    public static void Validate(PlatformForm form) => throw new NotImplementedException();
+    public static void Validate(PlatformForm form)
+    {
+        if (string.IsNullOrWhiteSpace(form.Platform))
+            throw new ArgumentException("Name the platform the form is from.", nameof(form));
+        if (form.AnnualTotal < 0)
+            throw new ArgumentOutOfRangeException(nameof(form), form.AnnualTotal, "An annual total cannot be negative.");
+        if (form.Monthly is null)
+            return;
+        if (form.Form == TaxForm.Form1099Nec)
+            throw new ArgumentException("A 1099-NEC reports a year, not months.", nameof(form));
+        if (form.Monthly.Count != 12)
+            throw new ArgumentException($"A 1099-K has twelve months; {form.Monthly.Count} were given.", nameof(form));
+        if (form.Monthly.Sum() != form.AnnualTotal)
+            throw new ArgumentException($"The months add up to {form.Monthly.Sum()}, not the annual {form.AnnualTotal}.", nameof(form));
+    }
 
     /// <summary>FR-29 (SDD 6.6).</summary>
     public static TaxSummary Summarize(
@@ -52,10 +70,46 @@ public static class Tax
         MileageTotals miles,
         Result chargingCost,
         IReadOnlyList<Expense> expenses,
-        MileageRate? rate) => throw new NotImplementedException();
+        MileageRate? rate)
+    {
+        decimal Spent(params ExpenseCategory[] categories) =>
+            expenses.Where(e => categories.Contains(e.Category)).Sum(e => e.Amount.Value);
+
+        var byCategory = Enum.GetValues<ExpenseCategory>().ToDictionary(c => c, c => Spent(c));
+        var parkingAndTolls = Spent(ExpenseCategory.Parking, ExpenseCategory.Tolls);
+
+        var allMiles = miles.BusinessMiles + miles.PersonalMiles;
+        Result? share = allMiles > 0 ? new Result(miles.BusinessMiles / allMiles, []) : null;
+
+        Result? standardVehicle = rate is null ? null : new Result(miles.BusinessMiles * rate.PerMile, []);
+        var standard = new DeductionMethod(
+            standardVehicle, parkingAndTolls,
+            standardVehicle is null ? null : new Result(standardVehicle.Value + parkingAndTolls, []));
+
+        var vehicleCosts = chargingCost.Value + Spent(ExpenseCategory.Vehicle);
+        Result? actualVehicle = share is null ? null : new Result(vehicleCosts * share.Value, chargingCost.Assumptions);
+        var actual = new DeductionMethod(
+            actualVehicle, parkingAndTolls,
+            actualVehicle is null ? null : new Result(actualVehicle.Value + parkingAndTolls, chargingCost.Assumptions));
+
+        return new TaxSummary(
+            year, grossByPlatform, miles, share, chargingCost, byCategory, rate, standard, actual,
+            Spent(ExpenseCategory.Phone, ExpenseCategory.Supplies, ExpenseCategory.Other));
+    }
 
     /// <summary>FR-31: the form against the ledger's twelve months.</summary>
-    public static Reconciliation Reconcile(PlatformForm form, IReadOnlyList<decimal> recordedByMonth) => throw new NotImplementedException();
+    public static Reconciliation Reconcile(PlatformForm form, IReadOnlyList<decimal> recordedByMonth)
+    {
+        Validate(form);
+        if (recordedByMonth.Count != 12)
+            throw new ArgumentException("The ledger's year has twelve months.", nameof(recordedByMonth));
+
+        var recorded = recordedByMonth.Sum();
+        var months = form.Monthly?
+            .Select((reported, i) => new MonthDifference(i + 1, recordedByMonth[i], reported, reported - recordedByMonth[i]))
+            .ToList();
+        return new Reconciliation(form.Year, form.Platform, form.Form, recorded, form.AnnualTotal, form.AnnualTotal - recorded, months);
+    }
 }
 
 public interface ITaxService

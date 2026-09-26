@@ -80,6 +80,25 @@ public static class LedgerApi
 
         api.MapRecordApi();
 
+        api.MapPost("/tax/{year:int}/mileage-rate", (int year, MileageRateRequest request, ITaxService taxes) =>
+        {
+            taxes.SetMileageRate(year, request.PerMile);
+            return Results.NoContent();
+        });
+
+        api.MapGet("/tax/{year:int}", (int year, ITaxService taxes) => Results.Ok(taxes.Summary(year)));
+
+        api.MapPost("/tax/{year:int}/forms", (int year, PlatformForm form, ITaxService taxes) =>
+        {
+            taxes.RecordForm(form with { Year = year });
+            return Results.NoContent();
+        });
+
+        api.MapGet("/tax/{year:int}/reconcile/{platform}", (int year, string platform, ITaxService taxes) =>
+            taxes.Reconcile(year, platform) is { } r
+                ? Results.Ok(r)
+                : Results.Problem($"No {year} tax form entered for {platform}.", statusCode: StatusCodes.Status404NotFound));
+
         api.MapGet("/reports", (DateOnly from, DateOnly to, IReportService reports) =>
             Results.Ok(reports.Report(from, to)));
 

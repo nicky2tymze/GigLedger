@@ -14,10 +14,11 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     public HomeRate HomeRateOn(DateOnly date)
     {
-        var row = db.HomeRates.AsEnumerable()
+        // Among current versions (a rate re-entered for the same date supersedes the earlier entry),
+        // the one with the latest effective date on or before the day.
+        var row = Current(db.HomeRates.AsNoTracking())
             .Where(r => r.EffectiveFrom <= date)
-            .OrderByDescending(r => r.EffectiveFrom).ThenByDescending(r => r.RecordedAt)
-            .FirstOrDefault() ?? throw new InvalidOperationException("No home rate is stored; the schema seed is missing.");
+            .MaxBy(r => r.EffectiveFrom) ?? throw new InvalidOperationException("No home rate is stored; the schema seed is missing.");
         return new HomeRate(row.PerKwh, row.EffectiveFrom, row.IsPlaceholder);
     }
 
@@ -25,7 +26,8 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
     {
         if (perKwh < 0)
             throw new ArgumentOutOfRangeException(nameof(perKwh), perKwh, "A rate cannot be negative.");
-        db.HomeRates.Add(new HomeRateRow { RecordedAt = clock.GetUtcNow(), PerKwh = perKwh, EffectiveFrom = effectiveFrom });
+        var sameDate = Current(db.HomeRates.AsNoTracking()).SingleOrDefault(r => r.EffectiveFrom == effectiveFrom);
+        db.HomeRates.Add(new HomeRateRow { RecordedAt = clock.GetUtcNow(), SupersedesId = sameDate?.Id, PerKwh = perKwh, EffectiveFrom = effectiveFrom });
         db.SaveChanges();
     }
 
@@ -113,8 +115,8 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     public Settings Get()
     {
-        // SQLite cannot order by DateTimeOffset in SQL; the table is a handful of rows.
-        var current = db.Settings.AsEnumerable().MaxBy(r => r.RecordedAt)
+        // The version nothing supersedes, not the latest timestamp: two in one instant would tie.
+        var current = Current(db.Settings.AsNoTracking()).SingleOrDefault()
             ?? throw new InvalidOperationException("No settings are stored; the schema seed is missing.");
         return new Settings(current.AcceptThreshold, current.DefaultMilesPerKwh, current.DefaultPricePerKwh);
     }
@@ -124,6 +126,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         db.Settings.Add(new SettingsRow
         {
             RecordedAt = clock.GetUtcNow(),
+            SupersedesId = Current(db.Settings.AsNoTracking()).Single().Id,
             AcceptThreshold = settings.AcceptThreshold,
             DefaultMilesPerKwh = settings.DefaultMilesPerKwh,
             DefaultPricePerKwh = settings.DefaultPricePerKwh,
