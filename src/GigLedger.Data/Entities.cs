@@ -64,3 +64,34 @@ public sealed class SettingsRow : LedgerRecord
     public decimal DefaultMilesPerKwh { get; set; }
     public decimal DefaultPricePerKwh { get; set; }
 }
+
+public sealed class ChargeSessionRow : LedgerRecord
+{
+    public DateTimeOffset At { get; set; }
+    public decimal Odometer { get; set; }
+    public Grade OdometerGrade { get; set; }
+    public decimal Kwh { get; set; }
+    public Grade KwhGrade { get; set; }
+    public decimal? Cost { get; set; }
+    public Grade? CostGrade { get; set; }
+    public int StartSoc { get; set; }
+    public int EndSoc { get; set; }
+    public string Charger { get; set; } = "";
+    public ChargeType Type { get; set; }
+    public Purpose Purpose { get; set; }
+}
+
+public sealed class TipRow : LedgerRecord
+{
+    public Guid TripId { get; set; }
+    public decimal Amount { get; set; }
+    public Grade AmountGrade { get; set; }
+    public DateTimeOffset PostedAt { get; set; }
+}
+
+public sealed class HomeRateRow : LedgerRecord
+{
+    public decimal PerKwh { get; set; }
+    public DateOnly EffectiveFrom { get; set; }
+    public bool IsPlaceholder { get; set; }
+}

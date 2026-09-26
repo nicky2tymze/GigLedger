@@ -7,8 +7,18 @@ namespace GigLedger.Data;
 /// (FR-34). They move data in and out; every calculation is delegated to Core.
 /// </summary>
 public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
-    : ISettingsService, IOfferService, ITripService, IShiftService
+    : ISettingsService, IOfferService, ITripService, IShiftService, IChargeService
 {
+    // ---- Slice 2 (stubs until the tests are in) ----
+
+    public HomeRate HomeRateOn(DateOnly date) => throw new NotImplementedException();
+    public void SetHomeRate(decimal perKwh, DateOnly effectiveFrom) => throw new NotImplementedException();
+    public Guid Record(ChargeSession session) => throw new NotImplementedException();
+    public IReadOnlyList<CostedCharge> Between(DateTimeOffset from, DateTimeOffset to) => throw new NotImplementedException();
+    EnergyReport IChargeService.Report(DateTimeOffset from, DateTimeOffset to) => throw new NotImplementedException();
+    public void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt) => throw new NotImplementedException();
+    TripReport ITripService.Report(Guid tripId) => throw new NotImplementedException();
+
     // ---- Settings ----
 
     public Settings Get()

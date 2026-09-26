@@ -192,6 +192,54 @@ public sealed class ApiTests : IDisposable
         Assert.Equal(trip, Assert.Single(trips!).Id);
     }
 
+    // ---- Slice 2 through the API ----
+
+    [Fact]
+    public async Task FR33_AChargeSessionAndTheEnergyReport()
+    {
+        var session = new ChargeSession(T0, new(17_935m, Grade.Measured), new(24.3m, Grade.Measured), new(16.77m, Grade.Measured),
+            36, 71, "Blink", ChargeType.DcFast, Purpose.Work);
+        Assert.Equal(HttpStatusCode.Created, (await _http.PostAsJsonAsync("/api/charges", session, Json)).StatusCode);
+
+        var report = await _http.GetFromJsonAsync<EnergyReport>(
+            $"/api/energy?from={Uri.EscapeDataString(T0.AddDays(-1).ToString("o"))}&to={Uri.EscapeDataString(T0.AddDays(1).ToString("o"))}", Json);
+        Assert.Equal(1, report!.Sessions);
+        Assert.Equal(16.77m / 24.3m, report.Prices.FastOnly!.Value);
+        Assert.Null(report.Efficiency); // one session cannot measure efficiency
+    }
+
+    [Fact]
+    public async Task FR33_AnImpossibleChargeSessionIs400()
+    {
+        var bad = new ChargeSession(T0, new(17_935m, Grade.Measured), new(0m, Grade.Measured), new(0m, Grade.Measured),
+            36, 71, "Blink", ChargeType.DcFast, Purpose.Work);
+        Assert.Equal(HttpStatusCode.BadRequest, (await _http.PostAsJsonAsync("/api/charges", bad, Json)).StatusCode);
+    }
+
+    [Fact]
+    public async Task FR33_ATipOnceThenConflict()
+    {
+        var trip = await AcceptRun4(await StartShift());
+        await _http.PostAsJsonAsync($"/api/trips/{trip}/actuals", Run4Actuals, Json);
+        var tip = new TipRequest(6.00m, T0.AddHours(12));
+        Assert.Equal(HttpStatusCode.NoContent, (await _http.PostAsJsonAsync($"/api/trips/{trip}/tip", tip, Json)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await _http.PostAsJsonAsync($"/api/trips/{trip}/tip", tip, Json)).StatusCode);
+
+        var report = await _http.GetFromJsonAsync<TripReport>($"/api/trips/{trip}/report", Json);
+        Assert.Equal(6.00m, report!.Trip.Tip!.Value.Value);
+        Assert.True(report.Rates!.GrossPerHour.Value > report.Rates.GrossPerHourBeforeTip.Value);
+    }
+
+    [Fact]
+    public async Task FR33_TheHomeRateCanBeSet()
+    {
+        var response = await _http.PostAsJsonAsync("/api/settings/home-rate", new HomeRateRequest(0.13m, new DateOnly(2026, 9, 1)), Json);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var rate = await _http.GetFromJsonAsync<HomeRate>("/api/settings/home-rate?on=2026-09-25", Json);
+        Assert.Equal(0.13m, rate!.PerKwh);
+        Assert.False(rate.IsPlaceholder);
+    }
+
     // ---- Refusals map to status codes ----
 
     [Fact]

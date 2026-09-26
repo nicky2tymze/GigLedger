@@ -11,3 +11,7 @@ public sealed record EndShiftRequest(DateTimeOffset EndedAt, Graded<decimal> End
 public sealed record AcceptOfferRequest(Offer Offer, DateTimeOffset AcceptedAt);
 
 public sealed record Created(Guid Id);
+
+public sealed record TipRequest(decimal Amount, DateTimeOffset PostedAt);
+
+public sealed record HomeRateRequest(decimal PerKwh, DateOnly EffectiveFrom);

@@ -10,8 +10,14 @@ public sealed record Settings(decimal AcceptThreshold, decimal DefaultMilesPerKw
 /// <summary>An offer's forecast and the accept rule's answer (FR-11, FR-12).</summary>
 public sealed record OfferEvaluation(Result Forecast, Verdict Verdict, decimal Threshold);
 
-/// <summary>A stored trip: the offer as accepted, and its actuals once recorded.</summary>
-public sealed record StoredTrip(Guid Id, Guid ShiftId, Offer Offer, DateTimeOffset AcceptedAt, GradedActuals? Actuals);
+/// <summary>A stored trip: the offer as accepted, its actuals once recorded, and its tip once posted.</summary>
+public sealed record StoredTrip(Guid Id, Guid ShiftId, Offer Offer, DateTimeOffset AcceptedAt, GradedActuals? Actuals, Graded<decimal>? Tip = null);
+
+/// <summary>A trip with everything computed about it (FR-14, FR-16, FR-17). Rates and error need actuals.</summary>
+public sealed record TripReport(StoredTrip Trip, TripRates? Rates, EstimateError? EstimateError, EnergyBasis Energy);
+
+/// <summary>Energy over a range of charging (FR-8, FR-9).</summary>
+public sealed record EnergyReport(int Sessions, Result? Efficiency, EnergyPrices Prices);
 
 /// <summary>Trip actuals with their grades (FR-3, FR-7).</summary>
 public sealed record GradedActuals(Graded<int> ElapsedMinutes, Graded<decimal> RouteMiles, Graded<decimal> ReturnMiles)
@@ -33,6 +39,19 @@ public interface ISettingsService
     Settings Get();
     /// <summary>Stores a new version; the old one stays (SDD 5.3).</summary>
     void Set(Settings settings);
+    /// <summary>The home rate in effect on a date: the newest one effective on or before it (FR-5).</summary>
+    HomeRate HomeRateOn(DateOnly date);
+    void SetHomeRate(decimal perKwh, DateOnly effectiveFrom);
+}
+
+public interface IChargeService
+{
+    /// <summary>FR-5. Validated before it is stored.</summary>
+    Guid Record(ChargeSession session);
+    /// <summary>Sessions at or after from and before to, each with its cost.</summary>
+    IReadOnlyList<CostedCharge> Between(DateTimeOffset from, DateTimeOffset to);
+    /// <summary>FR-8, FR-9 over the sessions in the range.</summary>
+    EnergyReport Report(DateTimeOffset from, DateTimeOffset to);
 }
 
 public interface IOfferService
@@ -50,6 +69,10 @@ public interface ITripService
     StoredTrip Get(Guid tripId);
     /// <summary>Every trip accepted on the shift, in the order accepted.</summary>
     IReadOnlyList<StoredTrip> OnShift(Guid shiftId);
+    /// <summary>FR-6: one tip per trip, the whole trip's tip.</summary>
+    void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt);
+    /// <summary>FR-14, FR-16, FR-17, on the energy of the 30 days before the trip's shift (FR-9a).</summary>
+    TripReport Report(Guid tripId);
 }
 
 public interface IShiftService

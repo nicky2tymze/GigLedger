@@ -10,12 +10,17 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
     public DbSet<TripRow> Trips => Set<TripRow>();
     public DbSet<TripActualsRow> TripActuals => Set<TripActualsRow>();
     public DbSet<SettingsRow> Settings => Set<SettingsRow>();
+    public DbSet<ChargeSessionRow> ChargeSessions => Set<ChargeSessionRow>();
+    public DbSet<TipRow> Tips => Set<TipRow>();
+    public DbSet<HomeRateRow> HomeRates => Set<HomeRateRow>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder conventions)
     {
         // Grades are stored by name, so the file reads plainly and an enum reorder cannot
         // silently regrade stored numbers.
         conventions.Properties<Core.Grade>().HaveConversion<string>();
+        conventions.Properties<Core.ChargeType>().HaveConversion<string>();
+        conventions.Properties<Core.Purpose>().HaveConversion<string>();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -23,6 +28,17 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         model.Entity<ShiftCloseRow>().HasIndex(r => r.ShiftId);
         model.Entity<TripRow>().HasIndex(r => r.ShiftId);
         model.Entity<TripActualsRow>().HasIndex(r => r.TripId);
+        model.Entity<TipRow>().HasIndex(r => r.TripId);
+
+        // SRS 0.3: the placeholder home rate, until one is read from a bill.
+        model.Entity<HomeRateRow>().HasData(new HomeRateRow
+        {
+            Id = new Guid("5e771495-0000-4000-8000-000000000002"),
+            RecordedAt = new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.FromHours(-5)),
+            PerKwh = Core.HomeRate.Placeholder.PerKwh,
+            EffectiveFrom = Core.HomeRate.Placeholder.EffectiveFrom,
+            IsPlaceholder = true,
+        });
 
         // The confirmed starting settings (SDD section 11), stored as the first version.
         model.Entity<SettingsRow>().HasData(new SettingsRow

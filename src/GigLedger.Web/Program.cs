@@ -21,6 +21,7 @@ builder.Services.AddScoped<ISettingsService>(sp => sp.GetRequiredService<LedgerS
 builder.Services.AddScoped<IOfferService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<ITripService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<IShiftService>(sp => sp.GetRequiredService<LedgerServices>());
+builder.Services.AddScoped<IChargeService>(sp => sp.GetRequiredService<LedgerServices>());
 
 // Grades travel by name in JSON, as they do in the database.
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
