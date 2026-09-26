@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.3 · 2026-09-25 · DRAFT, for review. 0.3 adds the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.4 · 2026-09-25 · DRAFT, for review. 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -133,13 +133,18 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 
 - **FR-25 Nothing is deleted.** Every entry is kept permanently. A correction is stored as a new
   version that points to the entry it replaces; the original stays readable, with who changed it
-  and when.
-- **FR-26 Mileage log.** Every drive carries date, start and end odometer, miles, and a
-  purpose: business or personal. The business mileage log can be printed or exported per year in
-  a form that meets a contemporaneous-log standard.
+  and when. **Every correction carries a one-line reason**, shown in the record's history beside
+  the original.
+- **FR-26 Mileage log.** Every drive carries date, start and end odometer, miles, a purpose
+  (business or personal), and **a short statement of where and why**. The business mileage log can
+  be printed or exported per year in a form that meets a contemporaneous-log standard.
+- **FR-26a** A shift's odometer span is logged as a business drive automatically. The drive from
+  home to where a shift starts, and back, is logged as its own drive, and the driver sets its
+  purpose. GigLedger records; it does not decide what is deductible.
 - **FR-27 Receipts.** Any charge session, payout, or expense can have its source document attached
-  (a receipt image, PDF, or export file). The file is stored with the record, and its hash is kept
-  so a later change to the file is detectable.
+  (a receipt image, PDF, or export file). The file is stored **inside the database**, so one file
+  still backs up the whole ledger (NFR-7), and its SHA-256 hash is kept so a later change to the
+  file is detectable.
 - **FR-28 Expenses.** Record business expenses beyond charging (phone, parking, tolls, supplies,
   vehicle costs) with category, amount, date, and receipt.
 - **FR-29 Annual tax summary.** For a tax year: gross earnings by platform, business miles,
