@@ -1,0 +1,78 @@
+# GigLedger on Kubernetes: SDD 8, NFR-4.
+#
+# EXACTLY ONE REPLICA, and it is replaced, never rolled. SQLite allows one writer, and the
+# ledger is a single file on one volume. Two pods on that file would corrupt it, so:
+#   - replicas is 1 and must stay 1;
+#   - the strategy is Recreate, because a RollingUpdate starts the new pod before stopping
+#     the old one, which is two writers for the length of the rollout;
+#   - the volume is ReadWriteOnce, so the cluster itself refuses a second node mounting it.
+# Scaling out would mean replacing SQLite, not raising this number.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gigledger-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gigledger
+  labels: { app: gigledger }
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: gigledger }
+  template:
+    metadata:
+      labels: { app: gigledger }
+    spec:
+      securityContext:
+        # The image runs as UID 1654; fsGroup lets it write the volume.
+        runAsNonRoot: true
+        runAsUser: 1654
+        fsGroup: 1654
+      containers:
+        - name: gigledger
+          image: gigledger:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ConnectionStrings__Ledger
+              value: "Data Source=/data/gigledger.db"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet: { path: /api/shifts/open, port: 8080 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/shifts/open, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: gigledger-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gigledger
+spec:
+  type: NodePort
+  selector: { app: gigledger }
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080

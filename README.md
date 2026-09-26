@@ -26,7 +26,7 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 
 ## Status
 
-**Slice 1, the demo core, is complete.**
+**Slice 1, the demo core, and Slice 1a, the container, are complete.**
 
 | Requirement | What works |
 |---|---|
@@ -39,12 +39,12 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 | FR-25 (structure) | Nothing is updated or deleted, enforced by EF and by database triggers |
 | FR-33, FR-34 | A JSON API over the same services the screens use; the Web project computes nothing |
 | NFR-1, 3, 5, 6 | Tests first; local SQLite, no account; money is `decimal`; ISO dates |
+| NFR-4 | Docker image and a single-replica Kubernetes manifest, run and verified (below) |
 
 **Deferred, not built yet.** Nothing below is shown as working anywhere in the app.
 
 | Slice | Requirements |
 |---|---|
-| 1a. Container | NFR-4: Dockerfile and a single-replica Kubernetes manifest |
 | 2. Measured energy | FR-5 charge sessions, FR-6 payouts and tips, FR-8 measured efficiency, FR-9 home and fast charging cost, FR-16 estimate error, FR-17 tips recomputing a trip |
 | 3. The record | FR-21 to FR-24 reports, imports, exports; FR-25 correction screens; FR-26 mileage log; FR-27 receipts; FR-28 expenses; FR-29 to FR-31 tax summary and reconciliation; FR-32 full export; NFR-7 backup |
 
@@ -78,6 +78,34 @@ dotnet run --project src/GigLedger.Web
 
 The app creates `gigledger.db` in the working directory on first run. Set
 `ConnectionStrings__Ledger` to put it elsewhere.
+
+### In a container
+
+```
+docker build -t gigledger:local .
+docker run -p 8080:8080 -v gigledger-data:/data gigledger:local
+```
+
+The ledger lives on the `/data` volume, never in the image, and the app runs as a non-root user.
+
+### On Kubernetes
+
+```
+kubectl create namespace gigledger
+kubectl -n gigledger apply -f deploy/gigledger.yaml
+kubectl -n gigledger port-forward svc/gigledger 8080:8080
+```
+
+**Exactly one replica, replaced rather than rolled.** SQLite allows one writer and the ledger is
+one file on one volume, so the manifest pins `replicas: 1`, uses the `Recreate` strategy (a rolling
+update would briefly run two writers), and claims the volume `ReadWriteOnce`. Scaling out would mean
+replacing SQLite, not raising the number. The comment at the top of the manifest says the same.
+
+Verified on Docker Desktop's Kubernetes (v1.36): a shift written through the API survived killing
+the pod and starting its replacement, and a plain `docker run` kept its data across a new image and
+container on the same volume. Two defects surfaced only by running it, both fixed: the data folder
+was root-owned, so the first write would have failed, and a user named rather than numbered made
+Kubernetes refuse to start the pod under `runAsNonRoot`.
 
 ## Stack
 

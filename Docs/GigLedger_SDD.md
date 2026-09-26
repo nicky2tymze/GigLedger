@@ -220,7 +220,8 @@ Pages are thin: bind inputs, call a service, render the result.
 - **Slice 1a:** a multi-stage Dockerfile (SDK image builds, ASP.NET runtime image runs) and a
   Kubernetes manifest: one Deployment with **exactly one replica**, and a PersistentVolumeClaim
   holding the SQLite file. The manifest says why it is one replica: SQLite takes one writer, and two
-  pods on one file would corrupt it.
+  pods on one file would corrupt it. The same reason sets the update strategy to `Recreate`: a
+  rolling update starts the new pod before stopping the old one.
 
 ## 9. Test plan
 

@@ -36,7 +36,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// In a container, TLS ends in front of the pod (ingress or load balancer) and the app serves
+// plain HTTP on 8080, so there is no HTTPS port to redirect to. The official .NET images set
+// DOTNET_RUNNING_IN_CONTAINER.
+if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
+    app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
