@@ -4,14 +4,17 @@ public enum ChargeType { Home, DcFast }
 
 public enum Purpose { Work, Personal }
 
-/// <summary>One charging event (FR-5). Cost is null for a home session with no receipt.</summary>
+/// <summary>
+/// One charging event (FR-5). Cost is null for a home session with no receipt. Odometer and state
+/// of charge are null when unknown, as on an imported receipt; unknown is never stored as zero.
+/// </summary>
 public sealed record ChargeSession(
     DateTimeOffset At,
-    Graded<decimal> Odometer,
+    Graded<decimal>? Odometer,
     Graded<decimal> Kwh,
     Graded<decimal>? Cost,
-    int StartSoc,
-    int EndSoc,
+    int? StartSoc,
+    int? EndSoc,
     string Charger,
     ChargeType Type,
     Purpose Purpose);
@@ -77,11 +80,11 @@ public static class EnergyCalculations
     public static Result? MeasuredEfficiency(IReadOnlyList<ChargeSession> sessions)
     {
         if (sessions.Count < 2) return null;
-        var ordered = sessions.OrderBy(s => s.Odometer.Value).ToList();
+        var ordered = sessions.OrderBy(s => s.Odometer!.Value.Value).ToList();
         var first = ordered[0];
         var last = ordered[^1];
 
-        var miles = last.Odometer.Value - first.Odometer.Value;
+        var miles = last.Odometer!.Value.Value - first.Odometer!.Value.Value;
         var kwh = ordered.Take(ordered.Count - 1).Sum(s => s.Kwh.Value);
         if (miles <= 0 || kwh <= 0) return null;
 

@@ -99,6 +99,23 @@ public sealed class EnergyPageTests : TestContext
     }
 
     [Fact]
+    public void UI_Charges_BlankOdometerAndChargeAreRecordedAsUnknown()
+    {
+        var page = RenderComponent<Charges>();
+        page.Find("#kwh").Change("24.288");
+        page.Find("#cost").Change("16.76");
+        page.Find("#record-charge").Click();
+
+        var stored = Assert.Single(Charges.Between(Now.AddDays(-1), Now.AddDays(1))).Session;
+        Assert.Null(stored.Odometer);
+        Assert.Null(stored.StartSoc);
+        Assert.Null(stored.EndSoc);
+        var row = page.Find("#sessions tr.session").TextContent;
+        Assert.Contains("odometer unknown", row);
+        Assert.Contains("charge unknown", row);
+    }
+
+    [Fact]
     public void UI_Charges_OneSessionSaysWhyThereIsNoEfficiency()
     {
         Charges.Record(Fast(1000m, 40m, 27.60m, daysAgo: 6));

@@ -69,7 +69,67 @@ public class EnergyCalculationTests
         Assert.Throws<ArgumentException>(() => EnergyCalculations.Validate(s));
     }
 
+    [Fact]
+    public void FR5_UnknownOdometerAndStateOfChargeAreAccepted()
+    {
+        // A receipt carries neither, so an imported session has neither (SRS 0.5).
+        var s = Fast(1000m, 30m, 20.70m) with { Odometer = null, StartSoc = null, EndSoc = null };
+        EnergyCalculations.Validate(s);
+    }
+
+    [Fact]
+    public void FR5_AKnownStateOfChargeIsStillChecked_WhenTheOtherEndIsUnknown()
+    {
+        var s = Fast(1000m, 30m, 20.70m) with { StartSoc = null, EndSoc = 101 };
+        Assert.Throws<ArgumentOutOfRangeException>(() => EnergyCalculations.Validate(s));
+    }
+
     // ---- FR-8: wall-to-wheel efficiency ----
+
+    [Fact]
+    public void FR8_ASessionWithUnknownOdometerStillCountsItsEnergy()
+    {
+        // 1000 -> 1240 is 240 miles, on the 40 + 20 kWh bought before the last known reading.
+        // The middle session has no odometer, but its energy was bought and driven.
+        var eff = EnergyCalculations.MeasuredEfficiency(
+            [Fast(1000m, 40m, 27.60m), Fast(0m, 20m, 13.80m, day: 1) with { Odometer = null }, Fast(1240m, 50m, 34.50m, day: 3)]);
+        Assert.Equal(4.0m, eff!.Value);
+    }
+
+    [Fact]
+    public void FR8_OrderComesFromTheClock()
+    {
+        // Out of order in the list; time puts the unknown-odometer session between the readings.
+        var eff = EnergyCalculations.MeasuredEfficiency(
+            [Fast(1240m, 50m, 34.50m, day: 3), Fast(0m, 20m, 13.80m, day: 1) with { Odometer = null }, Fast(1000m, 40m, 27.60m)]);
+        Assert.Equal(4.0m, eff!.Value);
+    }
+
+    [Fact]
+    public void FR8_EnergyOutsideTheKnownReadingsDoesNotCount()
+    {
+        // Sessions before the first reading and after the last are outside the measured miles.
+        var eff = EnergyCalculations.MeasuredEfficiency(
+            [Fast(0m, 99m, 60m) with { Odometer = null }, Fast(1000m, 40m, 27.60m, day: 1),
+             Fast(1160m, 30m, 20.70m, day: 2), Fast(0m, 99m, 60m, day: 3) with { Odometer = null }]);
+        Assert.Equal(4.0m, eff!.Value); // 160 / 40
+    }
+
+    [Fact]
+    public void FR8_FewerThanTwoKnownReadingsCannotBeMeasured()
+    {
+        Assert.Null(EnergyCalculations.MeasuredEfficiency(
+            [Fast(1000m, 40m, 27.60m), Fast(0m, 35m, 24.15m, day: 2) with { Odometer = null }]));
+    }
+
+    [Fact]
+    public void FR8_AnUnknownArrivalChargeIsNamed()
+    {
+        var eff = EnergyCalculations.MeasuredEfficiency(
+            [Fast(1000m, 40m, 27.60m) with { StartSoc = null }, Fast(1160m, 35m, 24.15m, day: 2)]);
+        Assert.Equal(4.0m, eff!.Value);
+        Assert.Contains(eff.Assumptions, a => a.Input == "state of charge" && a.Source.Contains("unknown"));
+    }
 
     [Fact]
     public void FR8_MilesBetweenFirstAndLastOverKwhBoughtBeforeTheLast()

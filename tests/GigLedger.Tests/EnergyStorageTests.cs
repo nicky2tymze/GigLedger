@@ -62,6 +62,15 @@ public sealed class EnergyStorageTests : IDisposable
     }
 
     [Fact]
+    public void FR5_UnknownOdometerAndStateOfChargeComeBackUnknown()
+    {
+        var s = Fast(17_935m, 24.288m, 16.76m, daysAgo: 1) with { Odometer = null, StartSoc = null, EndSoc = null };
+        Charges.Record(s);
+        var stored = Assert.Single(Charges.Between(Now.AddDays(-2), Now));
+        Assert.Equal(s, stored.Session);
+    }
+
+    [Fact]
     public void FR5_AnImpossibleSessionIsRefusedAtEntry()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => Charges.Record(Fast(17_935m, 0m, 0m, daysAgo: 1)));

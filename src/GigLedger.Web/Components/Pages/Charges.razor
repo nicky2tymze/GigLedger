@@ -61,7 +61,7 @@
         {
             <tr class="session">
                 <td>@Display.Time(c.Session.At)</td>
-                <td>@Display.Miles(c.Session.Odometer.Value)</td>
+                <td>@Display.Miles(c.Session.Odometer!.Value.Value)</td>
                 <td>@c.Session.Kwh.Value kWh</td>
                 <td>@Display.Money(c.Cost.Value) <span class="grade">@(c.Session.Cost?.Grade.ToString() ?? "Derived")</span></td>
                 <td>@c.Session.StartSoc% to @c.Session.EndSoc%</td>
