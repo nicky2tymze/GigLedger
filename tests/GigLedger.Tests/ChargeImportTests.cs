@@ -215,6 +215,26 @@ public sealed class ChargeImportApiTests : IDisposable
     }
 
     [Fact]
+    public async Task FR33_AnImportedSessionCanBeFoundAndCorrected()
+    {
+        // The workflow after an import: list the sessions, then add what the receipt lacked.
+        await Import(File);
+        var range = $"from={Uri.EscapeDataString("2026-09-24T00:00:00-05:00")}&to={Uri.EscapeDataString("2026-09-25T00:00:00-05:00")}";
+        var listed = Assert.Single((await _http.GetFromJsonAsync<List<CostedCharge>>($"/api/charges?{range}", Json))!);
+        Assert.NotEqual(Guid.Empty, listed.Id);
+
+        var known = listed.Session with
+        {
+            Odometer = new(17_935m, Grade.Measured), StartSoc = 36, EndSoc = 71, Purpose = Purpose.Personal,
+        };
+        var corrected = await _http.PostAsJsonAsync($"/api/charges/{listed.Id}/correct", new CorrectChargeRequest(known, "Read from the dashboard"), Json);
+        Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
+
+        var now = Assert.Single((await _http.GetFromJsonAsync<List<CostedCharge>>($"/api/charges?{range}", Json))!);
+        Assert.Equal(known, now.Session);
+    }
+
+    [Fact]
     public async Task FR33_ARefusedFileIs400WithTheReason()
     {
         var response = await Import(File.Replace(",CDT,", ",EDT,"));
