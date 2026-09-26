@@ -180,9 +180,11 @@ public class EnergyCalculationTests
     [Fact]
     public void FR9a_AnEmptyWindowIsTheDefaults()
     {
+        // Compared field by field: record equality on a list compares references, not contents.
         var basis = EnergyCalculations.ForWindow([], Settings.Initial);
-        Assert.Equal(EnergyBasis.FromDefaults(4.0m, 0.69m), basis with { Assumptions = EnergyBasis.FromDefaults(4.0m, 0.69m).Assumptions });
-        Assert.Equal(2, basis.Assumptions.Count);
+        Assert.Equal(4.0m, basis.MilesPerKwh);
+        Assert.Equal(0.69m, basis.PricePerKwh);
+        Assert.Equal(["efficiency", "energy price"], basis.Assumptions.Select(a => a.Input));
     }
 
     [Fact]

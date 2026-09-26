@@ -41,23 +41,102 @@ public sealed record TripRates(
 public static class EnergyCalculations
 {
     /// <summary>Rejects a session no charger could produce.</summary>
-    public static void Validate(ChargeSession session) => throw new NotImplementedException();
+    public static void Validate(ChargeSession session)
+    {
+        if (session.Kwh.Value <= 0)
+            throw new ArgumentOutOfRangeException(nameof(session), session.Kwh.Value, "A session must deliver energy.");
+        if (session.Cost is { Value: < 0 })
+            throw new ArgumentOutOfRangeException(nameof(session), session.Cost.Value.Value, "Cost cannot be negative.");
+        if (session.StartSoc is < 0 or > 100 || session.EndSoc is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(session), "State of charge is a percentage, 0 to 100.");
+        if (session.EndSoc < session.StartSoc)
+            throw new ArgumentOutOfRangeException(nameof(session), "A session cannot end below where it started.");
+        if (session.Type == ChargeType.DcFast && session.Cost is null)
+            throw new ArgumentException("A fast-charging session needs the cost from its receipt.", nameof(session));
+    }
 
-    /// <summary>SDD 6.5: the receipt, or kWh × the home rate for a home session without one.</summary>
-    public static Result ChargeCost(ChargeSession session, HomeRate homeRate) => throw new NotImplementedException();
+    /// <summary>SDD 6.5: the receipt, or kWh x the home rate for a home session without one.</summary>
+    public static Result ChargeCost(ChargeSession session, HomeRate homeRate)
+    {
+        if (session.Cost is { } receipt)
+            return new Result(receipt.Value, []);
+        if (session.Type != ChargeType.Home)
+            throw new ArgumentException("A fast-charging session needs the cost from its receipt.", nameof(session));
 
-    /// <summary>FR-8: wall-to-wheel miles per kWh over the sessions given, or null when it cannot be measured.</summary>
-    public static Result? MeasuredEfficiency(IReadOnlyList<ChargeSession> sessions) => throw new NotImplementedException();
+        List<Assumption> assumptions = homeRate.IsPlaceholder
+            ? [new Assumption("home rate", $"placeholder ${homeRate.PerKwh}/kWh, not yet read from a bill")]
+            : [];
+        return new Result(session.Kwh.Value * homeRate.PerKwh, assumptions);
+    }
+
+    /// <summary>
+    /// FR-8: wall-to-wheel miles per kWh over the sessions given, or null when it cannot be
+    /// measured. Miles run from the first odometer reading to the last; the energy is what was
+    /// bought at every session except the last, since the last session's energy is not yet driven.
+    /// </summary>
+    public static Result? MeasuredEfficiency(IReadOnlyList<ChargeSession> sessions)
+    {
+        if (sessions.Count < 2) return null;
+        var ordered = sessions.OrderBy(s => s.Odometer.Value).ToList();
+        var first = ordered[0];
+        var last = ordered[^1];
+
+        var miles = last.Odometer.Value - first.Odometer.Value;
+        var kwh = ordered.Take(ordered.Count - 1).Sum(s => s.Kwh.Value);
+        if (miles <= 0 || kwh <= 0) return null;
+
+        List<Assumption> assumptions = first.StartSoc == last.StartSoc
+            ? []
+            : [new Assumption("state of charge", $"arrived at {first.StartSoc}% and at {last.StartSoc}%, so bought and driven energy differ")];
+        return new Result(miles / kwh, assumptions);
+    }
 
     /// <summary>FR-9: price per kWh home only, fast only, and blended, and the fast share of cost.</summary>
-    public static EnergyPrices Prices(IReadOnlyList<CostedCharge> charges) => throw new NotImplementedException();
+    public static EnergyPrices Prices(IReadOnlyList<CostedCharge> charges)
+    {
+        var home = charges.Where(c => c.Session.Type == ChargeType.Home).ToList();
+        var fast = charges.Where(c => c.Session.Type == ChargeType.DcFast).ToList();
+
+        var totalCost = charges.Sum(c => c.Cost.Value);
+        Result? fastShare = totalCost > 0
+            ? new Result(fast.Sum(c => c.Cost.Value) / totalCost, Assumptions(charges))
+            : null;
+        return new EnergyPrices(PricePerKwh(home), PricePerKwh(fast), PricePerKwh(charges), fastShare);
+    }
+
+    private static Result? PricePerKwh(IReadOnlyList<CostedCharge> charges)
+    {
+        var kwh = charges.Sum(c => c.Session.Kwh.Value);
+        return kwh > 0 ? new Result(charges.Sum(c => c.Cost.Value) / kwh, Assumptions(charges)) : null;
+    }
+
+    private static List<Assumption> Assumptions(IEnumerable<CostedCharge> charges) =>
+        charges.SelectMany(c => c.Cost.Assumptions).Distinct().ToList();
 
     /// <summary>FR-9a: measured where the window allows, the configured default (named) where it does not.</summary>
-    public static EnergyBasis ForWindow(IReadOnlyList<CostedCharge> window, Settings defaults) => throw new NotImplementedException();
+    public static EnergyBasis ForWindow(IReadOnlyList<CostedCharge> window, Settings defaults)
+    {
+        var fallback = EnergyBasis.FromDefaults(defaults.DefaultMilesPerKwh, defaults.DefaultPricePerKwh);
+        var efficiency = MeasuredEfficiency(window.Select(c => c.Session).ToList());
+        var price = Prices(window).Blend;
 
-    /// <summary>FR-16.</summary>
-    public static EstimateError EstimateError(Offer offer, TripActuals actuals) => throw new NotImplementedException();
+        var assumptions = new List<Assumption>();
+        assumptions.AddRange(efficiency?.Assumptions ?? fallback.Assumptions.Where(a => a.Input == "efficiency"));
+        assumptions.AddRange(price?.Assumptions ?? fallback.Assumptions.Where(a => a.Input == "energy price"));
 
-    /// <summary>FR-14, FR-17.</summary>
-    public static TripRates TripRates(decimal pay, decimal tip, TripActuals actuals, EnergyBasis energy) => throw new NotImplementedException();
+        return new EnergyBasis(
+            efficiency?.Value ?? fallback.MilesPerKwh,
+            price?.Value ?? fallback.PricePerKwh,
+            assumptions.Distinct().ToList());
+    }
+
+    /// <summary>FR-16: positive means the platform understated.</summary>
+    public static EstimateError EstimateError(Offer offer, TripActuals actuals) =>
+        new(actuals.ElapsedMinutes - offer.EstimatedMinutes.Value, actuals.RouteMiles - offer.StatedMiles.Value);
+
+    /// <summary>FR-14, FR-17: every rate before the tip and with it.</summary>
+    public static TripRates TripRates(decimal pay, decimal tip, TripActuals actuals, EnergyBasis energy) => new(
+        Calculations.ActualGrossPerHour(pay, actuals), Calculations.ActualGrossPerHour(pay + tip, actuals),
+        Calculations.ActualNetPerHour(pay, actuals, energy), Calculations.ActualNetPerHour(pay + tip, actuals, energy),
+        Calculations.TruePerMile(pay, actuals), Calculations.TruePerMile(pay + tip, actuals));
 }

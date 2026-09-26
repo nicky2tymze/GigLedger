@@ -66,7 +66,8 @@ public static class Calculations
         var tripHours = tripMinutes / 60m;
         var shiftMiles = shift.EndOdometer - shift.StartOdometer;
         var paidRouteMiles = trips.Sum(t => t.Actuals.RouteMiles);
-        var gross = trips.Sum(t => t.Pay);
+        var tips = trips.Sum(t => t.Tip);
+        var gross = trips.Sum(t => t.Pay) + tips; // FR-17: gross includes tips once posted
 
         var costPerMile = EnergyCostPerMile(energy);
         var energyCost = new Result(costPerMile.Value * shiftMiles, costPerMile.Assumptions);
@@ -86,7 +87,8 @@ public static class Calculations
             DeadheadMiles: shiftMiles - paidRouteMiles,
             ShiftRate: shiftRate,
             TripRate: tripRate,
-            RateGap: tripRate is null ? null : tripRate.Value - shiftRate.Value);
+            RateGap: tripRate is null ? null : tripRate.Value - shiftRate.Value,
+            Tips: tips);
     }
 
     private static decimal Hours(int minutes, string what)
