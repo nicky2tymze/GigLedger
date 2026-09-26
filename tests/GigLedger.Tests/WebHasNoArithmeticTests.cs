@@ -56,16 +56,38 @@ public partial class WebHasNoArithmeticTests
         Assert.Empty(Scan("app.MapGet(\"/api/shifts/{id}/summary\", Handler);"));
     }
 
-    [Fact]
-    public void TC34_NoMultiplicationOrDivisionInTheWebProject()
+    /// <summary>Every offender in the .cs and .razor files under root, build output excluded.</summary>
+    public static IReadOnlyList<string> ScanDirectory(string root)
     {
-        var root = WebSourceDirectory();
-        var offenders = Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
+        var files = Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
             .Where(f => f.EndsWith(".cs") || f.EndsWith(".razor"))
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                      && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .ToList();
+        return files
             .SelectMany(f => Scan(File.ReadAllText(f)).Select(hit => $"{Path.GetRelativePath(root, f)}: {hit}"))
             .ToList();
+    }
+
+    [Fact]
+    public void TC34_AScanThatReadsNoFilesFails()
+    {
+        // Zero files scanned is not zero offenders: a moved or emptied folder must not pass.
+        var empty = Directory.CreateTempSubdirectory("gigledger-noweb-");
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => ScanDirectory(empty.FullName));
+        }
+        finally
+        {
+            empty.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TC34_NoMultiplicationOrDivisionInTheWebProject()
+    {
+        var offenders = ScanDirectory(WebSourceDirectory());
         Assert.True(offenders.Count == 0, "Arithmetic in Web: " + string.Join("; ", offenders));
     }
 }
