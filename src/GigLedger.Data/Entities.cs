@@ -70,14 +70,14 @@ public sealed class SettingsRow : LedgerRecord
 public sealed class ChargeSessionRow : LedgerRecord
 {
     public DateTimeOffset At { get; set; }
-    public decimal Odometer { get; set; }
-    public Grade OdometerGrade { get; set; }
+    public decimal? Odometer { get; set; }
+    public Grade? OdometerGrade { get; set; }
     public decimal Kwh { get; set; }
     public Grade KwhGrade { get; set; }
     public decimal? Cost { get; set; }
     public Grade? CostGrade { get; set; }
-    public int StartSoc { get; set; }
-    public int EndSoc { get; set; }
+    public int? StartSoc { get; set; }
+    public int? EndSoc { get; set; }
     public string Charger { get; set; } = "";
     public ChargeType Type { get; set; }
     public Purpose Purpose { get; set; }

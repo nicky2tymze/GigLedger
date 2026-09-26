@@ -44,11 +44,11 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             SupersedesId = supersedes,
             CorrectionReason = reason,
             At = session.At,
-            Odometer = session.Odometer!.Value.Value, OdometerGrade = session.Odometer!.Value.Grade,
+            Odometer = session.Odometer?.Value, OdometerGrade = session.Odometer?.Grade,
             Kwh = session.Kwh.Value, KwhGrade = session.Kwh.Grade,
             Cost = session.Cost?.Value, CostGrade = session.Cost?.Grade,
-            StartSoc = session.StartSoc!.Value,
-            EndSoc = session.EndSoc!.Value,
+            StartSoc = session.StartSoc,
+            EndSoc = session.EndSoc,
             Charger = session.Charger,
             Type = session.Type,
             Purpose = session.Purpose,
@@ -59,7 +59,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
     }
 
     private static ChargeSession ToSession(ChargeSessionRow r) => new(
-        r.At, new(r.Odometer, r.OdometerGrade), new(r.Kwh, r.KwhGrade),
+        r.At, r.Odometer is { } odometer ? new Graded<decimal>(odometer, r.OdometerGrade!.Value) : null, new(r.Kwh, r.KwhGrade),
         r.Cost is { } cost ? new Graded<decimal>(cost, r.CostGrade!.Value) : null,
         r.StartSoc, r.EndSoc, r.Charger, r.Type, r.Purpose);
 

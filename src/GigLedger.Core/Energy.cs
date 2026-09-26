@@ -74,23 +74,30 @@ public static class EnergyCalculations
 
     /// <summary>
     /// FR-8: wall-to-wheel miles per kWh over the sessions given, or null when it cannot be
-    /// measured. Miles run from the first odometer reading to the last; the energy is what was
-    /// bought at every session except the last, since the last session's energy is not yet driven.
+    /// measured. Sessions are taken in time order. Miles run from the first known odometer reading
+    /// to the last; the energy is everything bought from the first of those up to, not including,
+    /// the last, since the last session's energy is not yet driven. A session with no odometer
+    /// between them still counts its energy: it was bought and driven.
     /// </summary>
     public static Result? MeasuredEfficiency(IReadOnlyList<ChargeSession> sessions)
     {
-        if (sessions.Count < 2) return null;
-        var ordered = sessions.OrderBy(s => s.Odometer!.Value.Value).ToList();
-        var first = ordered[0];
-        var last = ordered[^1];
+        var ordered = sessions.OrderBy(s => s.At).ToList();
+        var firstIndex = ordered.FindIndex(s => s.Odometer is not null);
+        var lastIndex = ordered.FindLastIndex(s => s.Odometer is not null);
+        if (firstIndex < 0 || lastIndex == firstIndex) return null;
+        var first = ordered[firstIndex];
+        var last = ordered[lastIndex];
 
         var miles = last.Odometer!.Value.Value - first.Odometer!.Value.Value;
-        var kwh = ordered.Take(ordered.Count - 1).Sum(s => s.Kwh.Value);
+        var kwh = ordered.Skip(firstIndex).Take(lastIndex - firstIndex).Sum(s => s.Kwh.Value);
         if (miles <= 0 || kwh <= 0) return null;
 
-        List<Assumption> assumptions = first.StartSoc == last.StartSoc
-            ? []
-            : [new Assumption("state of charge", $"arrived at {first.StartSoc}% and at {last.StartSoc}%, so bought and driven energy differ")];
+        List<Assumption> assumptions = (first.StartSoc, last.StartSoc) switch
+        {
+            (null, _) or (_, null) => [new Assumption("state of charge", "unknown on arrival at one or both ends, so bought and driven energy may differ")],
+            var (a, b) when a != b => [new Assumption("state of charge", $"arrived at {a}% and at {b}%, so bought and driven energy differ")],
+            _ => [],
+        };
         return new Result(miles / kwh, assumptions);
     }
 
