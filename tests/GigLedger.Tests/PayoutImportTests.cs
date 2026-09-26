@@ -279,6 +279,59 @@ public sealed class PayoutImportTests : IDisposable
         Assert.Equal(Parse(SparkWorkbook.Build([SparkWorkbook.Bonus])), Payouts.Year(2025));
     }
 
+    // ---- FR-31, FR-29: payouts as the record ----
+
+    private ITaxService Taxes => _ledger;
+
+    private static readonly decimal December = SparkWorkbook.Sum(SparkWorkbook.TipA, SparkWorkbook.Trip, SparkWorkbook.Bonus);
+
+    private void LogSparkTrip(DateTimeOffset accepted, decimal pay)
+    {
+        var shift = ((IShiftService)_ledger).Start("Spark", accepted, new(17_000m, Grade.Measured));
+        _ledger.Accept(shift, new Offer(new(pay, Grade.Stated), new(6.6m, Grade.Stated), 2, 32, new(58, Grade.Stated), accepted), accepted);
+    }
+
+    [Fact]
+    public void FR31_ImportedPayoutsAreTheRecord_ByTransactionMonth()
+    {
+        Import(SparkWorkbook.Build([SparkWorkbook.TipA, SparkWorkbook.Trip, SparkWorkbook.Bonus]));
+        var reported = Enumerable.Repeat(0m, 11).Append(December).ToList();
+        Taxes.RecordForm(new PlatformForm(2025, "Spark", TaxForm.Form1099K, December, reported));
+
+        var r = Taxes.Reconcile(2025, "Spark")!;
+        Assert.Equal(PaymentSource.ImportedPayouts, r.RecordedFrom);
+        Assert.Equal((December, 0m), (r.Recorded, r.Difference));
+        Assert.Equal(December, r.Months![11].Recorded);
+    }
+
+    [Fact]
+    public void FR31_WithoutPayouts_TheLoggedTripsAreTheRecord()
+    {
+        LogSparkTrip(Now, 34.89m);
+        Taxes.RecordForm(new PlatformForm(2026, "Spark", TaxForm.Form1099Nec, 40.00m, null));
+        var r = Taxes.Reconcile(2026, "Spark")!;
+        Assert.Equal(PaymentSource.LoggedTrips, r.RecordedFrom);
+        Assert.Equal(34.89m, r.Recorded);
+    }
+
+    [Fact]
+    public void FR31_PayoutsAndLoggedTripsAreNeverAddedTogether()
+    {
+        // The same trip, logged by hand and present in the export, is income once.
+        LogSparkTrip(new(2025, 12, 31, 11, 0, 0, TimeSpan.FromHours(-5)), 18.50m);
+        Import(SparkWorkbook.Build([SparkWorkbook.TipA, SparkWorkbook.Trip, SparkWorkbook.Bonus]));
+        Assert.Equal(December, Taxes.RecordedByMonth(2025, "Spark").Sum());
+    }
+
+    [Fact]
+    public void FR29_TheSummaryGrossComesFromThePayouts_AndSaysSo()
+    {
+        Import(SparkWorkbook.Build([SparkWorkbook.TipA, SparkWorkbook.Trip, SparkWorkbook.Bonus]));
+        var s = Taxes.Summary(2025);
+        Assert.Equal(December, s.GrossByPlatform["Spark"]);
+        Assert.Equal(PaymentSource.ImportedPayouts, s.GrossFrom!["Spark"]);
+    }
+
     [Fact]
     public void FR25_PayoutsRefuseBulkChanges()
     {

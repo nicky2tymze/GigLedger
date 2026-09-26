@@ -29,7 +29,11 @@ public sealed record TaxSummary(
     MileageRate? Rate,
     DeductionMethod StandardMileage,
     DeductionMethod ActualExpenses,
-    decimal OtherBusinessExpenses);
+    decimal OtherBusinessExpenses,
+    IReadOnlyDictionary<string, PaymentSource>? GrossFrom = null);
+
+/// <summary>FR-31: where a platform's recorded payouts for a year came from. Never both.</summary>
+public enum PaymentSource { LoggedTrips, ImportedPayouts }
 
 public sealed record MonthDifference(int Month, decimal Recorded, decimal Reported, decimal Difference);
 
@@ -37,7 +41,8 @@ public sealed record MonthDifference(int Month, decimal Recorded, decimal Report
 public sealed record Reconciliation(
     int Year, string Platform, TaxForm Form,
     decimal Recorded, decimal Reported, decimal Difference,
-    IReadOnlyList<MonthDifference>? Months);
+    IReadOnlyList<MonthDifference>? Months,
+    PaymentSource RecordedFrom = PaymentSource.LoggedTrips);
 
 public static class Tax
 {
