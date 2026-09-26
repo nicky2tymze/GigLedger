@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.2 · 2026-09-24 · DRAFT, for review. 0.2 closes the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.3 · 2026-09-25 · DRAFT, for review. 0.3 adds the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -68,11 +68,12 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   forecast in 5.3 can be run on any offer before deciding, and nothing is kept unless it is accepted.
 - **FR-3** For an accepted offer, record actual elapsed time, actual route miles and return miles.
 - **FR-4** Record a shift with start and end odometer readings and start and end times.
-- **FR-5** Record a charge session with kWh, cost, start and end state of charge, charger, and
-  whether the energy was for work or personal driving. Every session has a **charge type**: home
+- **FR-5** Record a charge session with kWh, cost, start and end state of charge, **the odometer
+  reading at the session**, charger, and whether the energy was for work or personal driving. Every session has a **charge type**: home
   or DC fast. A home session usually has no receipt, so its cost is its kWh times the home
   electricity rate, which is stored as data with an effective date, and the cost is graded
-  `derived`.
+  `derived`. Until the rate is read from a bill, a **placeholder of $0.15/kWh** is used, and every
+  number that depends on it says so (NFR-2).
 - **FR-6** Record a payout: amount, date posted, and which trip or trips it covers. A **tip**
   belongs to exactly one trip, and its amount is the total for the whole trip. On a trip with two
   or more drops the platform does not break the tip out by drop, so GigLedger records no per-drop
@@ -82,11 +83,17 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 
 ### 5.2 Energy model
 
-- **FR-8** Compute **measured efficiency** (miles per kWh) from two odometer readings and the kWh
-  delivered between them.
+- **FR-8** Compute **measured efficiency** (miles per kWh) wall to wheel: the miles between the
+  odometer readings of two charge sessions, divided by the kWh bought from the first of them up to
+  but not including the last. This counts charging losses, which the driver pays for. It is exact
+  when the battery arrived at the same state of charge at both sessions; when it did not, the result
+  carries that difference as an assumption.
 - **FR-9** Compute **energy cost per mile** from measured efficiency and the average cost per kWh
   over a chosen window, reported three ways: home only, fast only, and the actual blend for the
   window. Reports show how much of the energy cost came from fast charging.
+- **FR-9a** A shift's and a trip's energy cost use the **30 days of charging before the shift
+  started**. Where that window has too little data to measure (fewer than two sessions for
+  efficiency, none for price), the configured default is used and named (FR-10).
 - **FR-10** When no measured efficiency exists yet, use a configured default and mark every result
   that depends on it as `derived from default`.
 
