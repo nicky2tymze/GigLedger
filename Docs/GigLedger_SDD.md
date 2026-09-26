@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.3 · 2026-09-25 · DRAFT. Designs against SRS 0.3. 0.3 adds section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.4 · 2026-09-25 · DRAFT. Designs against SRS 0.4. 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -189,6 +189,30 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   before and after its tip, and a shift's gross includes tips with the tip total shown.
 - **Estimate error (FR-16).** Actual minutes − the platform's estimate, and actual route miles −
   stated miles. Positive means the platform understated.
+
+### 6.6 Reports and the tax summary (Slice 3b: FR-21, FR-24, FR-29 to FR-32)
+
+- **Reports (FR-21).** A period report sums the summaries of the closed shifts that started in it:
+  trips, gross, tips, energy cost, net, clock and trip hours, miles, unpaid miles, and the shift
+  and trip rates over the period. Each shift keeps its own 30-day energy basis. A week runs Monday
+  to Sunday. Every report exports to CSV (FR-24), one row per shift and a total row.
+- **Tax summary (FR-29, FR-30).** For a year: gross by platform, business and personal miles from
+  the mileage log, charging cost, and expenses by category, with both deduction methods side by
+  side. **This method is the author's reading of the IRS rules and must be confirmed with a tax
+  preparer before it is relied on:**
+  - *Standard mileage:* business miles × the year's rate, plus parking and tolls.
+  - *Actual expenses:* (all charging + vehicle expenses) × the business-use share (business miles ÷
+    all miles), plus parking and tolls.
+  - Phone, supplies, and other business expenses are listed on their own; they are the same under
+    either method.
+  The rate is entered per tax year from the published figure; until it is, the standard method
+  shows "rate not entered" rather than a number. GigLedger shows both methods and chooses neither.
+- **Reconciliation (FR-31).** The driver enters the platform's tax form: which form (1099-K or
+  1099-NEC), the annual total, and, for a 1099-K, the monthly amounts. Recorded payouts are trip pay
+  by the date the trip was accepted and tips by the date they posted. The difference is shown for
+  the year, and by month where the form gives months.
+- **Full export (FR-32).** One zip: a CSV per ledger table, every version included, and every
+  receipt as its original file, named by its id.
 
 ### 6.4 Guards
 
