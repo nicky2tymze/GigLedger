@@ -30,16 +30,18 @@ public sealed partial class LedgerServices : ITaxService
 
     TaxSummary ITaxService.Summary(int year)
     {
-        var platforms = db.Shifts.AsNoTracking().ToDictionary(s => s.Id, s => s.Platform);
-        var trips = db.Trips.AsNoTracking().ToList();
+        // Gross per platform from one source each (FR-31): imported payouts, or else logged trips.
         var gross = new Dictionary<string, decimal>();
-        foreach (var t in trips.Where(t => t.AcceptedAt.DateTime.Year == year))
-            gross[platforms[t.ShiftId]] = gross.GetValueOrDefault(platforms[t.ShiftId]) + t.Pay;
-        var shiftOfTrip = trips.ToDictionary(t => t.Id, t => t.ShiftId);
-        foreach (var tip in db.Tips.AsNoTracking().AsEnumerable().Where(t => t.PostedAt.DateTime.Year == year))
+        var grossFrom = new Dictionary<string, PaymentSource>();
+        var platforms = db.Shifts.AsNoTracking().Select(s => s.Platform)
+            .Concat(db.Payouts.AsNoTracking().Select(p => p.Platform))
+            .Distinct().ToList();
+        foreach (var platform in platforms)
         {
-            var platform = platforms[shiftOfTrip[tip.TripId]];
-            gross[platform] = gross.GetValueOrDefault(platform) + tip.Amount;
+            var (months, source, any) = Payments(year, platform);
+            if (!any) continue;
+            gross[platform] = months.Sum();
+            grossFrom[platform] = source;
         }
 
         // All charging in the year: the actual method applies the business share to it (SDD 6.6).
@@ -55,7 +57,8 @@ public sealed partial class LedgerServices : ITaxService
             ((IMileageService)this).Totals(year),
             charging,
             ((IExpenseService)this).Year(year).Select(e => e.Expense).ToList(),
-            RateFor(year));
+            RateFor(year),
+            grossFrom);
     }
 
     public void RecordForm(PlatformForm form)
@@ -74,23 +77,44 @@ public sealed partial class LedgerServices : ITaxService
         db.SaveChanges();
     }
 
-    public IReadOnlyList<decimal> RecordedByMonth(int year, string platform)
+    public IReadOnlyList<decimal> RecordedByMonth(int year, string platform) => Payments(year, platform).Months;
+
+    /// <summary>
+    /// SDD 6.6: a platform's payments in a year by month, from one source. The imported payouts
+    /// where any exist for the year, by transaction month; otherwise trip pay by the month
+    /// accepted and tips by the month posted. Never both: the export already holds every logged trip.
+    /// </summary>
+    private (decimal[] Months, PaymentSource Source, bool Any) Payments(int year, string platform)
     {
         var months = new decimal[12];
+        var payouts = Current(db.Payouts.AsNoTracking().Where(p => p.Platform == platform))
+            .Where(p => p.At.Year == year)
+            .ToList();
+        if (payouts.Count > 0)
+        {
+            foreach (var p in payouts)
+                months[p.At.Month - 1] += p.Amount;
+            return (months, PaymentSource.ImportedPayouts, true);
+        }
+
         var shifts = db.Shifts.AsNoTracking().Where(s => s.Platform == platform).Select(s => s.Id).ToHashSet();
         var trips = db.Trips.AsNoTracking().AsEnumerable().Where(t => shifts.Contains(t.ShiftId)).ToList();
         foreach (var t in trips.Where(t => t.AcceptedAt.DateTime.Year == year))
             months[t.AcceptedAt.DateTime.Month - 1] += t.Pay;
         var tripIds = trips.Select(t => t.Id).ToHashSet();
-        foreach (var tip in db.Tips.AsNoTracking().AsEnumerable().Where(t => tripIds.Contains(t.TripId) && t.PostedAt.DateTime.Year == year))
+        var tips = db.Tips.AsNoTracking().AsEnumerable().Where(t => tripIds.Contains(t.TripId) && t.PostedAt.DateTime.Year == year).ToList();
+        foreach (var tip in tips)
             months[tip.PostedAt.DateTime.Month - 1] += tip.Amount;
-        return months;
+        // A tip that posts in January for a December trip is still that year's income.
+        var any = tips.Count > 0 || trips.Any(t => t.AcceptedAt.DateTime.Year == year);
+        return (months, PaymentSource.LoggedTrips, any);
     }
 
     public Reconciliation? Reconcile(int year, string platform)
     {
         if (CurrentForm(year, platform) is not { } row) return null;
         var monthly = row.Monthly?.Split(',').Select(m => decimal.Parse(m, CultureInfo.InvariantCulture)).ToList();
-        return Tax.Reconcile(new PlatformForm(row.Year, row.Platform, row.Form, row.AnnualTotal, monthly), RecordedByMonth(year, platform));
+        var (months, source, _) = Payments(year, platform);
+        return Tax.Reconcile(new PlatformForm(row.Year, row.Platform, row.Form, row.AnnualTotal, monthly), months, source);
     }
 }

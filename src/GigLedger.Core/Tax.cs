@@ -75,7 +75,8 @@ public static class Tax
         MileageTotals miles,
         Result chargingCost,
         IReadOnlyList<Expense> expenses,
-        MileageRate? rate)
+        MileageRate? rate,
+        IReadOnlyDictionary<string, PaymentSource>? grossFrom = null)
     {
         decimal Spent(params ExpenseCategory[] categories) =>
             expenses.Where(e => categories.Contains(e.Category)).Sum(e => e.Amount.Value);
@@ -99,11 +100,12 @@ public static class Tax
 
         return new TaxSummary(
             year, grossByPlatform, miles, share, chargingCost, byCategory, rate, standard, actual,
-            Spent(ExpenseCategory.Phone, ExpenseCategory.Supplies, ExpenseCategory.Other));
+            Spent(ExpenseCategory.Phone, ExpenseCategory.Supplies, ExpenseCategory.Other), grossFrom);
     }
 
     /// <summary>FR-31: the form against the ledger's twelve months.</summary>
-    public static Reconciliation Reconcile(PlatformForm form, IReadOnlyList<decimal> recordedByMonth)
+    public static Reconciliation Reconcile(
+        PlatformForm form, IReadOnlyList<decimal> recordedByMonth, PaymentSource source = PaymentSource.LoggedTrips)
     {
         Validate(form);
         if (recordedByMonth.Count != 12)
@@ -113,7 +115,7 @@ public static class Tax
         var months = form.Monthly?
             .Select((reported, i) => new MonthDifference(i + 1, recordedByMonth[i], reported, reported - recordedByMonth[i]))
             .ToList();
-        return new Reconciliation(form.Year, form.Platform, form.Form, recorded, form.AnnualTotal, form.AnnualTotal - recorded, months);
+        return new Reconciliation(form.Year, form.Platform, form.Form, recorded, form.AnnualTotal, form.AnnualTotal - recorded, months, source);
     }
 }
 

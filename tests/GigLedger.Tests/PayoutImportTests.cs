@@ -324,6 +324,15 @@ public sealed class PayoutImportTests : IDisposable
     }
 
     [Fact]
+    public void FR29_ATipAloneInAYearIsStillThatYearsGross()
+    {
+        var shift = ((IShiftService)_ledger).Start("Spark", new(2025, 12, 31, 20, 0, 0, TimeSpan.FromHours(-5)), new(17_000m, Grade.Measured));
+        var trip = _ledger.Accept(shift, new Offer(new(18.50m, Grade.Stated), new(6.6m, Grade.Stated), 2, 32, new(58, Grade.Stated), new(2025, 12, 31, 20, 0, 0, TimeSpan.FromHours(-5))), new(2025, 12, 31, 20, 0, 0, TimeSpan.FromHours(-5)));
+        ((ITripService)_ledger).RecordTip(trip, 6.00m, new(2026, 1, 1, 9, 0, 0, TimeSpan.FromHours(-5)));
+        Assert.Equal(6.00m, Taxes.Summary(2026).GrossByPlatform["Spark"]);
+    }
+
+    [Fact]
     public void FR29_TheSummaryGrossComesFromThePayouts_AndSaysSo()
     {
         Import(SparkWorkbook.Build([SparkWorkbook.TipA, SparkWorkbook.Trip, SparkWorkbook.Bonus]));
