@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.5 · 2026-09-26 · DRAFT. Designs against SRS 0.5. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), and adds the charge import (6.7). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.5 · 2026-09-26 · DRAFT. Designs against SRS 0.5. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), and adds the charge import (6.7) and the payout import (6.8). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -233,6 +233,24 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   already stored are skipped and counted. The result is the count imported and the count skipped.
 - **Interface.** `POST /api/charges/import`, body `text/csv`. 200 with the counts; 400 with the
   reason for a refused file.
+
+### 6.8 Payout import (Slice 3c: FR-23)
+
+- **Reading.** `Xlsx.ReadSheet` reads one named sheet from the package with the framework's zip and
+  XML readers, no third-party library: inline strings, shared strings, and numbers, each cell
+  placed by its column letter. Numbers keep their stored text.
+- **Mapping.** `PayoutImport.Parse` finds the Transactions header row by its `Trip ID` cell and
+  maps columns by name; the zone is read from the date column's header, `Transaction date (CDT)`.
+  Times parse as `yyyy-MM-dd hh:mm tt`, invariant culture; `CDT` is UTC−5 and any other zone is
+  refused. The data ends at the first row with nothing past the first column (the disclaimer
+  footer). Amounts are rounded to the cent: the file stores them as binary floating point.
+- **Self-check.** The Summary sheet's `Total earnings` must equal the rows' sum to the cent.
+- **Storing.** A new append-only table, `Payouts` (FR-25 triggers in their own migration, since
+  EF runs table work after a migration's SQL). One transaction. The key is platform, trip ID,
+  time, type, and amount; for each key the file's count minus the stored count is added, never
+  less than zero. The result is the count imported and skipped.
+- **Interface.** `POST /api/payouts/import` with the .xlsx as the body; `GET /api/payouts?year=`.
+  Linking payouts to logged trips, and using them in the reconciliation (FR-31), come later.
 
 ### 6.4 Guards
 

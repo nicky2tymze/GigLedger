@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.5 · 2026-09-26 · DRAFT, for review. 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, and specifies the receipt import (FR-22). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.5 · 2026-09-26 · DRAFT, for review. 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, and specifies the receipt import (FR-22) and the payout import (FR-23). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -134,7 +134,17 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   odometer, state of charge, and purpose unknown (FR-5). **All or nothing:** a row that cannot be
   read, or that FR-5 would refuse, stops the whole file and names its line. A receipt number
   already in the ledger is skipped, so importing the same file twice stores it once.
-- **FR-23** Import payouts from a CSV of platform earnings.
+- **FR-23** Import payouts from the platform's earnings export. For Spark that is an .xlsx whose
+  Transactions sheet has one row per payment. Each row becomes a **payout**: platform, the
+  platform's trip ID, the time and its zone as printed, the type (trip earnings, tip, incentive,
+  adjustment credit), the amount graded stated, and the deposit status and date. Payouts stand on
+  their own, keyed by the platform's trip ID; they need no shift or trip logged in GigLedger.
+  **All or nothing:** a row that cannot be read, or an earning type not listed here, stops the
+  file and names the row. **The file checks itself:** the sum of its rows must equal the total on
+  its Summary sheet, or the file is refused. Re-importing stores only what is not already stored,
+  matching identical rows by count, so two real identical tips stay two. Spark labels every time
+  `CDT`, winter included; the label is stored as printed and read as UTC−5, an assumption the file
+  cannot settle.
 - **FR-24** Export any report to CSV.
 
 ### 5.7 Record keeping and tax preparation
