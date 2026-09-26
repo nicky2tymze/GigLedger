@@ -35,9 +35,6 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     public Guid Record(ChargeSession session) => AddCharge(session);
 
-    ImportResult IPayoutService.Import(Stream xlsx) => throw new NotImplementedException();
-
-    IReadOnlyList<Payout> IPayoutService.Year(int year) => throw new NotImplementedException();
 
     public ImportResult Import(string csv)
     {

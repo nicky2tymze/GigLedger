@@ -22,6 +22,7 @@ builder.Services.AddScoped<IOfferService>(sp => sp.GetRequiredService<LedgerServ
 builder.Services.AddScoped<ITripService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<IShiftService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<IChargeService>(sp => sp.GetRequiredService<LedgerServices>());
+builder.Services.AddScoped<IPayoutService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<IMileageService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<IExpenseService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<ICorrectionService>(sp => sp.GetRequiredService<LedgerServices>());

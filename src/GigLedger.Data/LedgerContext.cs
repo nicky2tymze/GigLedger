@@ -18,6 +18,7 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
     public DbSet<AttachmentRow> Attachments => Set<AttachmentRow>();
     public DbSet<MileageRateRow> MileageRates => Set<MileageRateRow>();
     public DbSet<PlatformFormRow> PlatformForms => Set<PlatformFormRow>();
+    public DbSet<PayoutRow> Payouts => Set<PayoutRow>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder conventions)
     {
@@ -29,6 +30,7 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         conventions.Properties<Core.ExpenseCategory>().HaveConversion<string>();
         conventions.Properties<Core.AttachedTo>().HaveConversion<string>();
         conventions.Properties<Core.TaxForm>().HaveConversion<string>();
+        conventions.Properties<Core.PayoutType>().HaveConversion<string>();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -39,6 +41,7 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         model.Entity<TipRow>().HasIndex(r => r.TripId);
         model.Entity<DriveRow>().HasIndex(r => r.ShiftId);
         model.Entity<AttachmentRow>().HasIndex(r => new { r.Owner, r.OwnerId });
+        model.Entity<PayoutRow>().HasIndex(r => new { r.Platform, r.TripId });
 
         // SRS 0.3: the placeholder home rate, until one is read from a bill.
         model.Entity<HomeRateRow>().HasData(new HomeRateRow

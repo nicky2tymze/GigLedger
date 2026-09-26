@@ -33,6 +33,7 @@ public sealed partial class LedgerServices : IExportService
         manifest.Add(Table(zip, "Attachments", db.Attachments));
         manifest.Add(Table(zip, "MileageRates", db.MileageRates));
         manifest.Add(Table(zip, "PlatformForms", db.PlatformForms));
+        manifest.Add(Table(zip, "Payouts", db.Payouts));
 
         // Receipts as their original files; the Attachments table carries each one's SHA-256.
         var receipts = db.Attachments.AsNoTracking().ToList();

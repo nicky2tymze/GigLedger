@@ -75,6 +75,17 @@ public static class LedgerApi
             return Results.Ok(charges.Import(await body.ReadToEndAsync()));
         });
 
+        api.MapPost("/payouts/import", async (HttpRequest request, IPayoutService payouts) =>
+        {
+            // The .xlsx is the body; read it whole, since the zip reader needs to seek.
+            using var file = new MemoryStream();
+            await request.Body.CopyToAsync(file);
+            file.Position = 0;
+            return Results.Ok(payouts.Import(file));
+        });
+
+        api.MapGet("/payouts", (int year, IPayoutService payouts) => Results.Ok(payouts.Year(year)));
+
         api.MapGet("/energy", (DateTimeOffset from, DateTimeOffset to, IChargeService charges) =>
             Results.Ok(charges.Report(from, to)));
 

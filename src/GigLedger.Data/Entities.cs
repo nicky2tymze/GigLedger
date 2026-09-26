@@ -85,6 +85,20 @@ public sealed class ChargeSessionRow : LedgerRecord
     public string? ReceiptNumber { get; set; }
 }
 
+/// <summary>One payment from a platform's earnings export (FR-23).</summary>
+public sealed class PayoutRow : LedgerRecord
+{
+    public string Platform { get; set; } = "";
+    public string TripId { get; set; } = "";
+    public DateTimeOffset At { get; set; }
+    public string Zone { get; set; } = "";
+    public PayoutType Type { get; set; }
+    public decimal Amount { get; set; }
+    public Grade AmountGrade { get; set; }
+    public string DepositStatus { get; set; } = "";
+    public DateOnly? DepositedOn { get; set; }
+}
+
 public sealed class TipRow : LedgerRecord
 {
     public Guid TripId { get; set; }

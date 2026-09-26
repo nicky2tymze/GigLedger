@@ -6,6 +6,7 @@ using GigLedger.Data;
 using GigLedger.Web;
 using GigLedger.Web.Components.Pages;
 using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GigLedger.Tests;
@@ -22,13 +23,15 @@ public sealed class ExportTests : TestContext
     ];
 
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
+    private readonly LedgerContext _db;
     private readonly LedgerServices _ledger;
     private readonly string _backups = Directory.CreateTempSubdirectory("gigledger-export-").FullName;
 
     public ExportTests()
     {
         _connection.Open();
-        _ledger = new LedgerServices(LedgerDatabase.Open(_connection), new TestClock(Now));
+        _db = LedgerDatabase.Open(_connection);
+        _ledger = new LedgerServices(_db, new TestClock(Now));
         Services.AddSingleton<IBackupService>(_ledger);
         Services.AddSingleton(new BackupFolder(_backups));
     }
@@ -53,6 +56,15 @@ public sealed class ExportTests : TestContext
     {
         using var reader = new StreamReader(zip.GetEntry(entry)!.Open());
         return reader.ReadToEnd().Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    [Fact]
+    public void FR32_EveryTableInTheModelIsExported()
+    {
+        // From the model, not a list: a table added later cannot be left out of the export unnoticed.
+        using var zip = Exported();
+        foreach (var table in _db.Model.GetEntityTypes().Select(e => e.GetTableName()!))
+            Assert.True(zip.GetEntry($"{table}.csv") is not null, $"{table} is not in the export");
     }
 
     private static readonly byte[] ReceiptPdf = "%PDF-1.7 Walmart receipt $18.47"u8.ToArray();
