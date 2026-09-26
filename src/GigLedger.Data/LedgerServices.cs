@@ -1,4 +1,5 @@
 using GigLedger.Core;
+using Microsoft.EntityFrameworkCore;
 
 namespace GigLedger.Data;
 
@@ -30,12 +31,16 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     // ---- Charging (FR-5, FR-8, FR-9) ----
 
-    public Guid Record(ChargeSession session)
+    public Guid Record(ChargeSession session) => AddCharge(session);
+
+    private Guid AddCharge(ChargeSession session, Guid? supersedes = null, string? reason = null)
     {
         EnergyCalculations.Validate(session);
         var row = new ChargeSessionRow
         {
             RecordedAt = clock.GetUtcNow(),
+            SupersedesId = supersedes,
+            CorrectionReason = reason,
             At = session.At,
             Odometer = session.Odometer.Value, OdometerGrade = session.Odometer.Grade,
             Kwh = session.Kwh.Value, KwhGrade = session.Kwh.Grade,
@@ -51,16 +56,18 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         return row.Id;
     }
 
+    private static ChargeSession ToSession(ChargeSessionRow r) => new(
+        r.At, new(r.Odometer, r.OdometerGrade), new(r.Kwh, r.KwhGrade),
+        r.Cost is { } cost ? new Graded<decimal>(cost, r.CostGrade!.Value) : null,
+        r.StartSoc, r.EndSoc, r.Charger, r.Type, r.Purpose);
+
     public IReadOnlyList<CostedCharge> Between(DateTimeOffset from, DateTimeOffset to) =>
-        // Filtered in memory: SQLite cannot compare DateTimeOffset in SQL.
-        db.ChargeSessions.AsEnumerable()
+        // Current versions only (FR-25), filtered in memory: SQLite cannot compare DateTimeOffset in SQL.
+        Current(db.ChargeSessions.AsNoTracking())
             .Where(r => r.At >= from && r.At < to)
             .OrderBy(r => r.At)
-            .Select(r => new ChargeSession(
-                r.At, new(r.Odometer, r.OdometerGrade), new(r.Kwh, r.KwhGrade),
-                r.Cost is { } cost ? new Graded<decimal>(cost, r.CostGrade!.Value) : null,
-                r.StartSoc, r.EndSoc, r.Charger, r.Type, r.Purpose))
-            .Select(s => new CostedCharge(s, EnergyCalculations.ChargeCost(s, HomeRateOn(DateOnly.FromDateTime(s.At.DateTime)))))
+            .Select(r => (r.Id, Session: ToSession(r)))
+            .Select(x => new CostedCharge(x.Session, EnergyCalculations.ChargeCost(x.Session, HomeRateOn(DateOnly.FromDateTime(x.Session.At.DateTime))), x.Id))
             .ToList();
 
     EnergyReport IChargeService.Report(DateTimeOffset from, DateTimeOffset to)
@@ -246,6 +253,15 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             EndOdometerGrade = endOdometer.Grade,
         });
         db.SaveChanges();
+
+        // FR-26a: the shift's odometer span is a business drive. A shift that went nowhere logs none.
+        if (endOdometer.Value > shift.StartOdometer)
+            AddDrive(new Drive(
+                DateOnly.FromDateTime(shift.StartedAt.DateTime),
+                new(shift.StartOdometer, shift.StartOdometerGrade),
+                endOdometer,
+                Purpose.Work,
+                $"{shift.Platform} delivery shift"), shiftId);
     }
 
     StoredShift IShiftService.Get(Guid shiftId)
@@ -294,7 +310,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         db.Trips.SingleOrDefault(t => t.Id == id) ?? throw new NotFoundException($"No trip {id}.");
 
     private TripActualsRow? FindActuals(Guid tripId) =>
-        db.TripActuals.SingleOrDefault(a => a.TripId == tripId);
+        Current(db.TripActuals.AsNoTracking().Where(a => a.TripId == tripId)).SingleOrDefault();
 
     private TipRow? FindTip(Guid tripId) =>
         db.Tips.SingleOrDefault(t => t.TripId == tripId);

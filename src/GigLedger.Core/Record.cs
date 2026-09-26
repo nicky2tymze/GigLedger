@@ -31,19 +31,39 @@ public sealed record StoredAttachment(AttachmentInfo Info, byte[] Content);
 public static class RecordKeeping
 {
     /// <summary>FR-26: rejects a drive no odometer could produce, or one with no stated purpose.</summary>
-    public static void Validate(Drive drive) => throw new NotImplementedException();
+    public static void Validate(Drive drive)
+    {
+        if (drive.EndOdometer.Value < drive.StartOdometer.Value)
+            throw new ArgumentOutOfRangeException(nameof(drive), drive.EndOdometer.Value, "End odometer is below the start reading.");
+        if (string.IsNullOrWhiteSpace(drive.Description))
+            throw new ArgumentException("Say where the drive went and why; the log needs both.", nameof(drive));
+    }
 
     /// <summary>FR-26: end reading minus start reading.</summary>
-    public static decimal Miles(Drive drive) => throw new NotImplementedException();
+    public static decimal Miles(Drive drive) => drive.EndOdometer.Value - drive.StartOdometer.Value;
 
     /// <summary>FR-26: business and personal miles across the drives given.</summary>
-    public static MileageTotals Totals(IEnumerable<Drive> drives) => throw new NotImplementedException();
+    public static MileageTotals Totals(IEnumerable<Drive> drives)
+    {
+        var list = drives.ToList();
+        return new MileageTotals(
+            list.Where(d => d.Purpose == Purpose.Work).Sum(Miles),
+            list.Where(d => d.Purpose == Purpose.Personal).Sum(Miles));
+    }
 
     /// <summary>FR-28.</summary>
-    public static void Validate(Expense expense) => throw new NotImplementedException();
+    public static void Validate(Expense expense)
+    {
+        if (expense.Amount.Value <= 0)
+            throw new ArgumentOutOfRangeException(nameof(expense), expense.Amount.Value, "An expense must cost something.");
+    }
 
     /// <summary>FR-25: a correction must say why.</summary>
-    public static void ValidateReason(string? reason) => throw new NotImplementedException();
+    public static void ValidateReason(string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("A correction must say why it was made.", nameof(reason));
+    }
 
     /// <summary>FR-27: the SHA-256 of the content, lowercase hex.</summary>
     public static string Sha256(byte[] content) => Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
