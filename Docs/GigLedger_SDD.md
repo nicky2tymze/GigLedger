@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.2 · 2026-09-25 · DRAFT. Designs against SRS 0.2. 0.2 records the three section 11 decisions.
+**Version:** 0.3 · 2026-09-25 · DRAFT. Designs against SRS 0.3. 0.3 adds section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -170,6 +170,25 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
 - summary: trips, gross, energy cost, net, hours, miles
 - **a shift with no trips is allowed** (decided 2026-09-25). Its shift rate is $0/hr; its trip rate
   and the gap have no value, because there was no trip time to divide by. The screen says so.
+
+### 6.5 Measured energy (Slice 2: FR-5, FR-6, FR-8, FR-9, FR-9a, FR-16, FR-17)
+
+- **Charge cost.** A fast session's cost is its receipt (measured). A home session with no receipt
+  costs kWh × the home rate in effect on its date, graded derived; while that rate is the
+  placeholder, the cost names it as an assumption.
+- **Efficiency, wall to wheel (FR-8).** Order the window's sessions by odometer. Miles = last
+  reading − first reading. kWh = everything bought from the first session up to, not including,
+  the last. Fewer than two sessions, or no miles, means no measurement. If the battery arrived at
+  the first and last sessions at different states of charge, the result says so.
+- **Price per kWh (FR-9).** Total cost over total kWh, three ways: home only, fast only, blend.
+  Fast share = fast cost over all cost. Each carries the assumptions of the costs inside it.
+- **The window (FR-9a).** For a shift, the sessions in the 30 days before it started. Measured
+  efficiency and blended price replace the defaults wherever they exist; whichever is missing
+  stays the default and is named.
+- **Tips (FR-6, FR-17).** One tip per trip, the whole trip's tip. A trip's rates are reported
+  before and after its tip, and a shift's gross includes tips with the tip total shown.
+- **Estimate error (FR-16).** Actual minutes − the platform's estimate, and actual route miles −
+  stated miles. Positive means the platform understated.
 
 ### 6.4 Guards
 
