@@ -52,7 +52,12 @@ public interface IChargeService
     IReadOnlyList<CostedCharge> Between(DateTimeOffset from, DateTimeOffset to);
     /// <summary>FR-8, FR-9 over the sessions in the range.</summary>
     EnergyReport Report(DateTimeOffset from, DateTimeOffset to);
+    /// <summary>FR-22. All or nothing; receipt numbers already stored are skipped.</summary>
+    ImportResult Import(string csv);
 }
+
+/// <summary>FR-22: how many rows were stored, and how many were already in the ledger.</summary>
+public sealed record ImportResult(int Imported, int Skipped);
 
 public interface IOfferService
 {

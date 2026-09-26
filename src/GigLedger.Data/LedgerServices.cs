@@ -35,6 +35,8 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     public Guid Record(ChargeSession session) => AddCharge(session);
 
+    public ImportResult Import(string csv) => throw new NotImplementedException();
+
     private Guid AddCharge(ChargeSession session, Guid? supersedes = null, string? reason = null)
     {
         EnergyCalculations.Validate(session);
@@ -51,7 +53,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             EndSoc = session.EndSoc,
             Charger = session.Charger,
             Type = session.Type,
-            Purpose = session.Purpose,
+            Purpose = session.Purpose!.Value,
         };
         db.ChargeSessions.Add(row);
         db.SaveChanges();

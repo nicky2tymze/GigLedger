@@ -17,7 +17,8 @@ public sealed record ChargeSession(
     int? EndSoc,
     string Charger,
     ChargeType Type,
-    Purpose Purpose);
+    Purpose? Purpose,
+    string? ReceiptNumber = null);
 
 /// <summary>The home electricity rate from a date on (FR-5). A placeholder is named wherever it is used.</summary>
 public sealed record HomeRate(decimal PerKwh, DateOnly EffectiveFrom, bool IsPlaceholder)
