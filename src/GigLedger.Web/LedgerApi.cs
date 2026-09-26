@@ -79,6 +79,12 @@ public static class LedgerApi
         });
 
         api.MapRecordApi();
+
+        api.MapGet("/reports", (DateOnly from, DateOnly to, IReportService reports) =>
+            Results.Ok(reports.Report(from, to)));
+
+        api.MapGet("/reports.csv", (DateOnly from, DateOnly to, IReportService reports) =>
+            Results.File(System.Text.Encoding.UTF8.GetBytes(reports.Csv(from, to)), "text/csv", $"gigledger-{from:yyyy-MM-dd}-to-{to:yyyy-MM-dd}.csv"));
     }
 
     /// <summary>

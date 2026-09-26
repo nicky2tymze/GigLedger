@@ -1,5 +1,90 @@
 @page "/reports"
+@inject IReportService Reporting
+@inject TimeProvider Clock
 
 <PageTitle>Reports · GigLedger</PageTitle>
 
 <h1>Reports</h1>
+
+<div class="form">
+    <label>From <input id="from" type="date" @bind="from" /></label>
+    <label>To <input id="to" type="date" @bind="to" /></label>
+    <button id="show" @onclick="Load">Show</button>
+    <button @onclick="ThisWeek">This week</button>
+    <button @onclick="Today">Today</button>
+</div>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+@if (report is { Shifts: 0 })
+{
+    <p class="hint">No closed shifts in this period.</p>
+}
+else if (report is not null)
+{
+    <table class="summary">
+        <tr><th>Shifts</th><td>@report.Shifts</td></tr>
+        <tr><th>Trips</th><td>@report.Trips</td></tr>
+        <tr><th>Gross, including tips</th><td id="report-gross">@Display.Money(report.Gross)</td></tr>
+        <tr><th>Tips</th><td id="report-tips">@Display.Money(report.Tips)</td></tr>
+        <tr><th>Energy cost</th><td>@Display.Money(report.EnergyCost.Value)</td></tr>
+        <tr><th>Net</th><td id="report-net">@Display.Money(report.Net.Value)</td></tr>
+        <tr><th>Shift rate</th><td id="report-shift-rate">@(report.ShiftRate is { } s ? Display.Rate(s.Value) : "no time")</td></tr>
+        <tr><th>Trip rate</th><td id="report-trip-rate">@(report.TripRate is { } t ? Display.Rate(t.Value) : "no trips")</td></tr>
+        <tr><th>Miles</th><td id="report-miles">@Display.Miles(report.Miles)</td></tr>
+        <tr><th>Unpaid miles</th><td id="report-unpaid">@Display.Miles(report.UnpaidMiles)</td></tr>
+    </table>
+    @if (report.Net.RestsOnDefault)
+    {
+        <ul>
+            @foreach (var a in report.Net.Assumptions)
+            {
+                <li>@a.Input: @a.Source</li>
+            }
+        </ul>
+    }
+}
+
+<p><a id="export-csv" href="@CsvUrl()">Export to CSV</a></p>
+
+@code {
+    private DateOnly from, to;
+    private PeriodReport? report;
+    private string? error;
+
+    // Built in @code: see the note on TC-34 about strings inside Razor attributes.
+    private string CsvUrl() => $"/api/reports.csv?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}";
+
+    private DateOnly TodayOnClock() => DateOnly.FromDateTime(Clock.GetLocalNow().DateTime);
+
+    protected override void OnInitialized() => ThisWeek();
+
+    private void ThisWeek()
+    {
+        (from, to) = Core.Reports.WeekOf(TodayOnClock());
+        Load();
+    }
+
+    private void Today()
+    {
+        from = to = TodayOnClock();
+        Load();
+    }
+
+    private void Load()
+    {
+        error = null;
+        try
+        {
+            report = Reporting.Report(from, to);
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            report = null;
+            error = Refusal.Reason(e);
+        }
+    }
+}
