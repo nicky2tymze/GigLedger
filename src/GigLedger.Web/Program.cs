@@ -22,6 +22,13 @@ builder.Services.AddScoped<IOfferService>(sp => sp.GetRequiredService<LedgerServ
 builder.Services.AddScoped<ITripService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<IShiftService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<IChargeService>(sp => sp.GetRequiredService<LedgerServices>());
+builder.Services.AddScoped<IMileageService>(sp => sp.GetRequiredService<LedgerServices>());
+builder.Services.AddScoped<IExpenseService>(sp => sp.GetRequiredService<LedgerServices>());
+builder.Services.AddScoped<ICorrectionService>(sp => sp.GetRequiredService<LedgerServices>());
+builder.Services.AddScoped<IAttachmentService>(sp => sp.GetRequiredService<LedgerServices>());
+builder.Services.AddScoped<IBackupService>(sp => sp.GetRequiredService<LedgerServices>());
+// NFR-7: where dated backups go. Configurable; never inside the image.
+builder.Services.AddSingleton(new BackupFolder(builder.Configuration["Backup:Folder"] ?? "backups"));
 
 // Grades travel by name in JSON, as they do in the database.
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
