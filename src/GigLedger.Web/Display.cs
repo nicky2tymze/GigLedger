@@ -17,4 +17,6 @@ public static class Display
     public static string Miles(decimal value) => value.ToString("#,0.0", Us) + " mi";
     public static string Hours(decimal value) => value.ToString("0.00", Us) + " h";
     public static string Time(DateTimeOffset value) => value.ToString("yyyy-MM-dd HH:mm", Us);
+    public static string Efficiency(decimal value) => value.ToString("0.00", Us) + " mi/kWh";
+    public static string PricePerKwh(decimal value) => value.ToString("C2", Us) + "/kWh";
 }
