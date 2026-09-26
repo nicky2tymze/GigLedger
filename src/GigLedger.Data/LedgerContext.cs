@@ -13,6 +13,9 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
     public DbSet<ChargeSessionRow> ChargeSessions => Set<ChargeSessionRow>();
     public DbSet<TipRow> Tips => Set<TipRow>();
     public DbSet<HomeRateRow> HomeRates => Set<HomeRateRow>();
+    public DbSet<DriveRow> Drives => Set<DriveRow>();
+    public DbSet<ExpenseRow> Expenses => Set<ExpenseRow>();
+    public DbSet<AttachmentRow> Attachments => Set<AttachmentRow>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder conventions)
     {
@@ -21,6 +24,8 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         conventions.Properties<Core.Grade>().HaveConversion<string>();
         conventions.Properties<Core.ChargeType>().HaveConversion<string>();
         conventions.Properties<Core.Purpose>().HaveConversion<string>();
+        conventions.Properties<Core.ExpenseCategory>().HaveConversion<string>();
+        conventions.Properties<Core.AttachedTo>().HaveConversion<string>();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -29,6 +34,8 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         model.Entity<TripRow>().HasIndex(r => r.ShiftId);
         model.Entity<TripActualsRow>().HasIndex(r => r.TripId);
         model.Entity<TipRow>().HasIndex(r => r.TripId);
+        model.Entity<DriveRow>().HasIndex(r => r.ShiftId);
+        model.Entity<AttachmentRow>().HasIndex(r => new { r.Owner, r.OwnerId });
 
         // SRS 0.3: the placeholder home rate, until one is read from a bill.
         model.Entity<HomeRateRow>().HasData(new HomeRateRow

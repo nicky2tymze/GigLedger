@@ -23,8 +23,8 @@ public sealed record HomeRate(decimal PerKwh, DateOnly EffectiveFrom, bool IsPla
     public static HomeRate Placeholder { get; } = new(0.15m, new DateOnly(2026, 1, 1), IsPlaceholder: true);
 }
 
-/// <summary>A charge session with its cost worked out.</summary>
-public sealed record CostedCharge(ChargeSession Session, Result Cost);
+/// <summary>A charge session with its cost worked out. Id is the stored session's, when it has one.</summary>
+public sealed record CostedCharge(ChargeSession Session, Result Cost, Guid Id = default);
 
 /// <summary>FR-9: price per kWh three ways, and the fast-charging share of cost. Null where there is no energy of that kind.</summary>
 public sealed record EnergyPrices(Result? HomeOnly, Result? FastOnly, Result? Blend, Result? FastShareOfCost);

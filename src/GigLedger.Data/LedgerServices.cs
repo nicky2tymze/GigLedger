@@ -6,7 +6,7 @@ namespace GigLedger.Data;
 /// The Core service interfaces, over the ledger. The UI and the API both call these
 /// (FR-34). They move data in and out; every calculation is delegated to Core.
 /// </summary>
-public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
+public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
     : ISettingsService, IOfferService, ITripService, IShiftService, IChargeService
 {
     // ---- Home rate (FR-5) ----

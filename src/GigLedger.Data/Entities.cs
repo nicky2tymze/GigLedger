@@ -11,6 +11,8 @@ public abstract class LedgerRecord
     public Guid Id { get; set; } = Guid.NewGuid();
     public DateTimeOffset RecordedAt { get; set; }
     public Guid? SupersedesId { get; set; }
+    /// <summary>Why this row corrects the one it supersedes (FR-25). Null on an original.</summary>
+    public string? CorrectionReason { get; set; }
 }
 
 // Graded numbers are stored as two columns, the value and its grade (SDD 5.1).
@@ -94,4 +96,35 @@ public sealed class HomeRateRow : LedgerRecord
     public decimal PerKwh { get; set; }
     public DateOnly EffectiveFrom { get; set; }
     public bool IsPlaceholder { get; set; }
+}
+
+public sealed class DriveRow : LedgerRecord
+{
+    public DateOnly Date { get; set; }
+    public decimal StartOdometer { get; set; }
+    public Grade StartOdometerGrade { get; set; }
+    public decimal EndOdometer { get; set; }
+    public Grade EndOdometerGrade { get; set; }
+    public Purpose Purpose { get; set; }
+    public string Description { get; set; } = "";
+    public Guid? ShiftId { get; set; }
+}
+
+public sealed class ExpenseRow : LedgerRecord
+{
+    public DateOnly Date { get; set; }
+    public ExpenseCategory Category { get; set; }
+    public decimal Amount { get; set; }
+    public Grade AmountGrade { get; set; }
+    public string Description { get; set; } = "";
+}
+
+public sealed class AttachmentRow : LedgerRecord
+{
+    public AttachedTo Owner { get; set; }
+    public Guid OwnerId { get; set; }
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "";
+    public byte[] Content { get; set; } = [];
+    public string Sha256 { get; set; } = "";
 }
