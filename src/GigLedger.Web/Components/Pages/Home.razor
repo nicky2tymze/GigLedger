@@ -58,6 +58,18 @@ else
                         <td>@Display.Miles(a.RouteMiles.Value) out, @Display.Miles(a.ReturnMiles.Value) back</td>
                         <td>@Display.PerMile(Calculations.TruePerMile(trip.Offer.Pay.Value, a.Values).Value)</td>
                         <td>@Display.Share(Calculations.DeadheadShare(a.Values).Value) unpaid</td>
+                        <td>net <span id="@($"net-{index}")">@Display.Rate(reports[index].Rates!.NetPerHour.Value)</span></td>
+                        @if (trip.Tip is { } tip)
+                        {
+                            <td>tip @Display.Money(tip.Value)</td>
+                        }
+                        else
+                        {
+                            <td class="form">
+                                <input id="@($"tip-{index}")" type="number" step="0.01" placeholder="tip" @bind="tips[index]" />
+                                <button id="@($"save-tip-{index}")" @onclick="() => SaveTip(index)">Save tip</button>
+                            </td>
+                        }
                     }
                     else
                     {
@@ -92,6 +104,8 @@ else
     private StoredShift? open;
     private List<StoredTrip> trips = [];
     private List<ActualsInput> actuals = [];
+    private List<TripReport> reports = [];
+    private List<decimal?> tips = [];
     private Guid? closedShift;
     private string? error;
 
@@ -110,6 +124,8 @@ else
         open = Shifts.Open();
         trips = open is null ? [] : Trips.OnShift(open.Id).ToList();
         actuals = trips.Select(_ => new ActualsInput()).ToList();
+        reports = trips.Select(t => Trips.Report(t.Id)).ToList();
+        tips = trips.Select(_ => (decimal?)null).ToList();
     }
 
     private DateTimeOffset Local(DateTime time) => new(time, Clock.LocalTimeZone.GetUtcOffset(time));
@@ -146,6 +162,12 @@ else
             new(input.Minutes.Value, Grade.Entered),
             new(input.Route.Value, Grade.Entered),
             new(input.Return.Value, Grade.Entered))));
+    }
+
+    private void SaveTip(int index)
+    {
+        if (tips[index] is not { } amount) { error = "Enter the tip as it posted."; return; }
+        Attempt(() => Trips.RecordTip(trips[index].Id, amount, Clock.GetLocalNow()));
     }
 
     private void End()

@@ -1,5 +1,163 @@
 @page "/charges"
+@inject IChargeService ChargeLog
+@inject ISettingsService Settings
+@inject TimeProvider Clock
 
 <PageTitle>Charging · GigLedger</PageTitle>
 
 <h1>Charging</h1>
+
+@if (error is not null)
+{
+    <p class="error">@error</p>
+}
+
+<section>
+    <h2>Record a session</h2>
+    <div class="form">
+        <label>Time <input id="time" type="datetime-local" @bind="time" /></label>
+        <label>Odometer <input id="odometer" type="number" step="0.1" @bind="odometer" /></label>
+        <label>kWh <input id="kwh" type="number" step="0.001" @bind="kwh" /></label>
+        <label>Cost ($), blank at home <input id="cost" type="number" step="0.01" @bind="cost" /></label>
+        <label>Start % <input id="start-soc" type="number" @bind="startSoc" /></label>
+        <label>End % <input id="end-soc" type="number" @bind="endSoc" /></label>
+        <label>Charger <input id="charger" @bind="charger" /></label>
+        <label>Type
+            <select id="type" @bind="type">
+                <option value="@ChargeType.DcFast">DC fast</option>
+                <option value="@ChargeType.Home">Home</option>
+            </select>
+        </label>
+        <label>For
+            <select id="purpose" @bind="purpose">
+                <option value="@Purpose.Work">Work</option>
+                <option value="@Purpose.Personal">Personal</option>
+            </select>
+        </label>
+        <button id="record-charge" @onclick="Record">Record</button>
+    </div>
+</section>
+
+<section>
+    <h2>The last 30 days</h2>
+    <table class="summary">
+        <tr><th>Sessions</th><td>@report.Sessions</td></tr>
+        <tr><th>Efficiency, wall to wheel</th><td id="efficiency">@(report.Efficiency is { } e ? Display.Efficiency(e.Value) : "needs two sessions with odometer readings")</td></tr>
+        <tr><th>Price, blended</th><td id="price-blend">@Price(report.Prices.Blend)</td></tr>
+        <tr><th>Price, DC fast</th><td id="price-fast">@Price(report.Prices.FastOnly)</td></tr>
+        <tr><th>Price, home</th><td id="price-home">@Price(report.Prices.HomeOnly)</td></tr>
+        <tr><th>Share of cost from fast charging</th><td id="fast-share">@(report.Prices.FastShareOfCost is { } f ? Display.Share(f.Value) : "none")</td></tr>
+    </table>
+
+    <ul id="assumptions">
+        @foreach (var a in Assumptions())
+        {
+            <li>@a.Input: @a.Source</li>
+        }
+    </ul>
+
+    <table id="sessions">
+        @foreach (var c in recent)
+        {
+            <tr class="session">
+                <td>@Display.Time(c.Session.At)</td>
+                <td>@Display.Miles(c.Session.Odometer.Value)</td>
+                <td>@c.Session.Kwh.Value kWh</td>
+                <td>@Display.Money(c.Cost.Value) <span class="grade">@(c.Session.Cost?.Grade.ToString() ?? "Derived")</span></td>
+                <td>@c.Session.StartSoc% to @c.Session.EndSoc%</td>
+                <td>@c.Session.Type, @c.Session.Purpose</td>
+            </tr>
+        }
+    </table>
+</section>
+
+<section>
+    <h2>Home electricity rate</h2>
+    <p id="current-home-rate">
+        In effect today: @Display.PricePerKwh(homeRate.PerKwh)
+        @(homeRate.IsPlaceholder ? "(placeholder, not yet read from a bill)" : $"from {homeRate.EffectiveFrom:yyyy-MM-dd}")
+    </p>
+    <div class="form">
+        <label>Rate ($/kWh) <input id="home-rate" type="number" step="0.0001" @bind="newRate" /></label>
+        <label>Effective from <input id="home-rate-from" type="date" @bind="newRateFrom" /></label>
+        <button id="set-home-rate" @onclick="SetHomeRate">Set rate</button>
+    </div>
+</section>
+
+@code {
+    private DateTime time;
+    private decimal? odometer, kwh, cost, newRate;
+    private int startSoc, endSoc;
+    private string charger = "Blink";
+    private ChargeType type = ChargeType.DcFast;
+    private Purpose purpose = Purpose.Work;
+    private DateOnly newRateFrom;
+
+    private EnergyReport report = new(0, null, new EnergyPrices(null, null, null, null));
+    private IReadOnlyList<CostedCharge> recent = [];
+    private HomeRate homeRate = HomeRate.Placeholder;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        var now = Clock.GetLocalNow();
+        time = now.DateTime;
+        newRateFrom = DateOnly.FromDateTime(now.DateTime);
+        Load();
+    }
+
+    private void Load()
+    {
+        var now = Clock.GetUtcNow();
+        // Between excludes its end; one tick past now includes a session recorded this instant.
+        var from = now.AddDays(-30);
+        var to = now.AddTicks(1);
+        report = ChargeLog.Report(from, to);
+        recent = ChargeLog.Between(from, to);
+        homeRate = Settings.HomeRateOn(DateOnly.FromDateTime(Clock.GetLocalNow().DateTime));
+    }
+
+    private static string Price(Result? price) => price is null ? "none" : Display.PricePerKwh(price.Value);
+
+    private IEnumerable<Assumption> Assumptions() =>
+        new[] { report.Efficiency, report.Prices.Blend }.Where(r => r is not null).SelectMany(r => r!.Assumptions).Distinct();
+
+    private void Record()
+    {
+        error = null;
+        if (odometer is null || kwh is null)
+        {
+            error = "Enter the odometer and the kWh.";
+            return;
+        }
+        try
+        {
+            ChargeLog.Record(new ChargeSession(
+                new DateTimeOffset(time, Clock.LocalTimeZone.GetUtcOffset(time)),
+                new(odometer.Value, Grade.Measured),
+                new(kwh.Value, type == ChargeType.Home ? Grade.Entered : Grade.Measured),
+                cost is { } c ? new Graded<decimal>(c, Grade.Measured) : null,
+                startSoc, endSoc, charger, type, purpose));
+            Load();
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
+
+    private void SetHomeRate()
+    {
+        error = null;
+        if (newRate is null) { error = "Enter the rate from the bill."; return; }
+        try
+        {
+            Settings.SetHomeRate(newRate.Value, newRateFrom);
+            Load();
+        }
+        catch (Exception e) when (Refusal.IsRefusal(e))
+        {
+            error = Refusal.Reason(e);
+        }
+    }
+}

@@ -26,7 +26,7 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 
 ## Status
 
-**Slice 1, the demo core, and Slice 1a, the container, are complete.**
+**Slices 1, 1a, and 2 are complete: the demo core, the container, and measured energy.**
 
 | Requirement | What works |
 |---|---|
@@ -34,23 +34,29 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 | FR-7 | Every stored number carries its grade, through the database and the API |
 | FR-10, NFR-2 | Every result lists the defaults behind it, on screen and in the API |
 | FR-11 to FR-13 | Forecast net $/hr at the accept screen, the $25 verdict, the return estimate |
-| FR-14, FR-15 | Per trip: true $/mile and unpaid (deadhead) share on the shift screen. Actual gross and net $/hr are computed and tested in Core but not yet shown on screen or returned by the API |
+| FR-14, FR-15 | Per trip: net $/hr, true $/mile, and unpaid (deadhead) share on the shift screen; every rate in the API's trip report |
 | FR-18 to FR-20 | Shift miles, deadhead miles, shift rate beside trip rate, the shift summary |
 | FR-25 (structure) | Nothing is updated or deleted, enforced by EF and by database triggers |
 | FR-33, FR-34 | A JSON API over the same services the screens use; the Web project computes nothing |
 | NFR-1, 3, 5, 6 | Tests first; local SQLite, no account; money is `decimal`; ISO dates |
 | NFR-4 | Docker image and a single-replica Kubernetes manifest, run and verified (below) |
+| FR-5 | Charge sessions with odometer, kWh, cost, state of charge, type, and purpose; home sessions costed at the home rate on their date |
+| FR-6, FR-17 | One tip per trip; the trip's rates before and after it; shift gross includes tips |
+| FR-8 | Efficiency measured wall to wheel, with any state-of-charge mismatch named |
+| FR-9, FR-9a | Price per kWh home, fast, and blended, and the fast share of cost; shifts, trips, and offers use the 30 days of charging before them |
+| FR-16 | How far off the platform's time and mileage estimates were, per trip |
 
 **Deferred, not built yet.** Nothing below is shown as working anywhere in the app.
 
 | Slice | Requirements |
 |---|---|
-| 2. Measured energy | FR-5 charge sessions, FR-6 payouts and tips, FR-8 measured efficiency, FR-9 home and fast charging cost, FR-16 estimate error, FR-17 tips recomputing a trip |
 | 3. The record | FR-21 to FR-24 reports, imports, exports; FR-25 correction screens; FR-26 mileage log; FR-27 receipts; FR-28 expenses; FR-29 to FR-31 tax summary and reconciliation; FR-32 full export; NFR-7 backup |
 
-Until Slice 2, energy cost rests on two settings, 4.0 mi/kWh and $0.69/kWh, and every number that
-uses them says so. The settings, including the $25 threshold, are stored as versions but cannot yet
-be changed from the screens or the API.
+Energy cost now comes from the last 30 days of charging. Where that window is too thin to measure,
+the settings (4.0 mi/kWh, $0.69/kWh) stand in, and every number that uses them says so. The home
+electricity rate is a **placeholder of $0.15/kWh** until it is read from a bill, and it is labeled
+wherever it is used; it can be set from the Charging page or the API. The $25 threshold and the
+defaults are stored as versions but cannot yet be changed from the screens or the API.
 
 ## Design notes worth reading the code for
 
@@ -96,6 +102,14 @@ kubectl -n gigledger apply -f deploy/gigledger.yaml
 kubectl -n gigledger port-forward svc/gigledger 8080:8080
 ```
 
+**Give every build its own tag.** A rebuilt image under the same tag is not picked up by a restart:
+the node keeps the copy it already has. Tag the build and point the deployment at it:
+
+```
+docker build -t gigledger:<version> .
+kubectl -n gigledger set image deploy/gigledger gigledger=gigledger:<version>
+```
+
 **Exactly one replica, replaced rather than rolled.** SQLite allows one writer and the ledger is
 one file on one volume, so the manifest pins `replicas: 1`, uses the `Recreate` strategy (a rolling
 update would briefly run two writers), and claims the volume `ReadWriteOnce`. Scaling out would mean
@@ -103,7 +117,14 @@ replacing SQLite, not raising the number. The comment at the top of the manifest
 
 Verified on Docker Desktop's Kubernetes (v1.36): a shift written through the API survived killing
 the pod and starting its replacement, and a plain `docker run` kept its data across a new image and
-container on the same volume. Two defects surfaced only by running it, both fixed: the data folder
+container on the same volume. Deploying Slice 2 over that volume ran its migrations against the
+existing ledger: the Slice 1 shift was still there, and the new tables took writes.
+
+One claim had to be corrected. The first Kubernetes check took "the pod runs as uid 1654" as proof
+that the fixed image was running, but the manifest's `runAsUser` produces the same result on the old
+image, and the rebuild under the same tag was probably never picked up. The persistence result
+stands either way. The fixed image was confirmed running when Slice 2 was deployed under its own tag
+and its new endpoints answered. Two defects surfaced only by running it, both fixed: the data folder
 was root-owned, so the first write would have failed, and a user named rather than numbered made
 Kubernetes refuse to start the pod under `runAsNonRoot`.
 

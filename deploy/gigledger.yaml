@@ -39,6 +39,8 @@ spec:
         fsGroup: 1654
       containers:
         - name: gigledger
+          # Set per build: `kubectl set image deploy/gigledger gigledger=gigledger:<version>`.
+          # Reusing one tag does not work: the node keeps the image it already has.
           image: gigledger:local
           imagePullPolicy: IfNotPresent
           ports:

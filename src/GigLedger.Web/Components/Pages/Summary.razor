@@ -14,7 +14,8 @@
 {
     <table class="summary">
         <tr><th>Trips</th><td id="trips">@summary.Trips</td></tr>
-        <tr><th>Gross</th><td id="gross">@Display.Money(summary.Gross)</td></tr>
+        <tr><th>Gross, including tips</th><td id="gross">@Display.Money(summary.Gross)</td></tr>
+        <tr><th>Tips</th><td id="tips">@Display.Money(summary.Tips)</td></tr>
         <tr><th>Energy cost</th><td id="energy-cost">@Display.Money(summary.EnergyCost.Value)</td></tr>
         <tr><th>Net</th><td id="net">@Display.Money(summary.Net.Value)</td></tr>
         <tr><th>Shift rate (all clock time)</th><td id="shift-rate">@Display.Rate(summary.ShiftRate.Value)</td></tr>
