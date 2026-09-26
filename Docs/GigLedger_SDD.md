@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.4 · 2026-09-25 · DRAFT. Designs against SRS 0.4. 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.5 · 2026-09-26 · DRAFT. Designs against SRS 0.5. 0.5 orders efficiency by time and allows unknown odometer and state of charge (6.5). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -176,10 +176,14 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
 - **Charge cost.** A fast session's cost is its receipt (measured). A home session with no receipt
   costs kWh × the home rate in effect on its date, graded derived; while that rate is the
   placeholder, the cost names it as an assumption.
-- **Efficiency, wall to wheel (FR-8).** Order the window's sessions by odometer. Miles = last
-  reading − first reading. kWh = everything bought from the first session up to, not including,
-  the last. Fewer than two sessions, or no miles, means no measurement. If the battery arrived at
-  the first and last sessions at different states of charge, the result says so.
+- **Efficiency, wall to wheel (FR-8).** Order the window's sessions by time. The ends are the
+  first and last sessions with a known odometer. Miles = last reading − first reading. kWh =
+  everything bought from the first end up to, not including, the last, counting sessions whose
+  odometer is unknown. Fewer than two known readings, or no miles, means no measurement. If the
+  battery arrived at the two ends at different states of charge, or either is unknown, the
+  result says so.
+- **Unknown values (SRS 0.5).** Odometer and state of charge are nullable in the model and the
+  table. Null means unknown: it is never stored as zero, and the screen shows "unknown".
 - **Price per kWh (FR-9).** Total cost over total kWh, three ways: home only, fast only, blend.
   Fast share = fast cost over all cost. Each carries the assumptions of the costs inside it.
 - **The window (FR-9a).** For a shift, the sessions in the 30 days before it started. Measured
