@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.5 · 2026-09-26 · DRAFT, for review. 0.5 allows a charge session's odometer and state of charge to be unknown, since a charging receipt carries neither. 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.5 · 2026-09-26 · DRAFT, for review. 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, and specifies the receipt import (FR-22). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -73,8 +73,8 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   or DC fast. A home session usually has no receipt, so its cost is its kWh times the home
   electricity rate, which is stored as data with an effective date, and the cost is graded
   `derived`. Until the rate is read from a bill, a **placeholder of $0.15/kWh** is used, and every
-  number that depends on it says so (NFR-2). **The odometer and the state of charge may be
-  unknown** (a receipt carries neither). Unknown is recorded as unknown, never as zero or a guess.
+  number that depends on it says so (NFR-2). **The odometer, the state of charge, and the
+  purpose may be unknown** (a receipt carries none of them). Unknown is recorded as unknown, never as zero or a guess.
 - **FR-6** Record a payout: amount, date posted, and which trip or trips it covers. A **tip**
   belongs to exactly one trip, and its amount is the total for the whole trip. On a trip with two
   or more drops the platform does not break the tip out by drop, so GigLedger records no per-drop
@@ -128,7 +128,12 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 ### 5.6 Reporting and import
 
 - **FR-21** Report by day, week, and custom range, with totals and rates.
-- **FR-22** Import charge sessions from a CSV export of charging receipts.
+- **FR-22** Import charge sessions from a CSV of charging receipts, one row per receipt, read by
+  column name: `receipt_number`, `start_local`, `timezone`, `kwh`, `net_total`, `station_id`,
+  `location_name`. Each row becomes a DC fast session with kWh and cost graded measured, and its
+  odometer, state of charge, and purpose unknown (FR-5). **All or nothing:** a row that cannot be
+  read, or that FR-5 would refuse, stops the whole file and names its line. A receipt number
+  already in the ledger is skipped, so importing the same file twice stores it once.
 - **FR-23** Import payouts from a CSV of platform earnings.
 - **FR-24** Export any report to CSV.
 

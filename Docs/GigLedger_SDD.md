@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.5 · 2026-09-26 · DRAFT. Designs against SRS 0.5. 0.5 orders efficiency by time and allows unknown odometer and state of charge (6.5). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.5 · 2026-09-26 · DRAFT. Designs against SRS 0.5. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), and adds the charge import (6.7). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -217,6 +217,22 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   the year, and by month where the form gives months.
 - **Full export (FR-32).** One zip: a CSV per ledger table, every version included, and every
   receipt as its original file, named by its id.
+
+### 6.7 Charge import (Slice 3c: FR-22)
+
+- **Reading.** `Csv.Read` parses RFC 4180 (quoted fields, doubled quotes). `ChargeImport.Parse`
+  maps each row by header name, so column order and extra columns do not matter. The time is
+  `start_local` in the named zone: `CDT` is UTC−5, `CST` is UTC−6, and any other zone is refused
+  rather than guessed. Numbers parse with the invariant culture.
+- **The session.** DC fast; kWh and cost measured; charger is `Blink <station_id>, <location_name>`;
+  the receipt number is stored on the session. Odometer, state of charge, and purpose are null.
+  Purpose becomes nullable for this; nothing computes from it (the tax summary takes all charging
+  times the business share).
+- **Storing.** One transaction. Every row is parsed and validated first; the first failure
+  refuses the file with its line number and nothing is stored. Rows whose receipt number is
+  already stored are skipped and counted. The result is the count imported and the count skipped.
+- **Interface.** `POST /api/charges/import`, body `text/csv`. 200 with the counts; 400 with the
+  reason for a refused file.
 
 ### 6.4 Guards
 
