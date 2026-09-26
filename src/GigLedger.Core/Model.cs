@@ -14,8 +14,8 @@ public sealed record Offer(
 /// <summary>What actually happened on an accepted trip (FR-3).</summary>
 public sealed record TripActuals(int ElapsedMinutes, decimal RouteMiles, decimal ReturnMiles);
 
-/// <summary>A trip's pay and actuals, as a shift summary needs them.</summary>
-public sealed record TripRecord(decimal Pay, TripActuals Actuals);
+/// <summary>A trip's pay, actuals, and posted tip, as a shift summary needs them.</summary>
+public sealed record TripRecord(decimal Pay, TripActuals Actuals, decimal Tip = 0m);
 
 /// <summary>The span of a shift, bounded by clock and odometer (FR-4).</summary>
 public sealed record ShiftSpan(int ClockMinutes, decimal StartOdometer, decimal EndOdometer);
@@ -47,5 +47,6 @@ public sealed record ShiftSummary(
     decimal DeadheadMiles,
     Result ShiftRate,
     Result? TripRate,
-    decimal? RateGap);
+    decimal? RateGap,
+    decimal Tips = 0m);
 
