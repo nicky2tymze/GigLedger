@@ -78,9 +78,7 @@ public static class Reports
     private static string Cents(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero).ToString("0.00", Invariant);
     private static string Tenths(decimal v) => Math.Round(v, 1, MidpointRounding.AwayFromZero).ToString("0.0", Invariant);
 
-    /// <summary>RFC 4180: a field with a comma, quote, or line break is quoted, and its quotes doubled.</summary>
-    private static string Quote(string field) =>
-        field.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? "\"" + field.Replace("\"", "\"\"") + "\"" : field;
+    private static string Quote(string field) => Csv.Quote(field);
 }
 
 public interface IReportService

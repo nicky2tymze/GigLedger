@@ -12,6 +12,11 @@
 
 <button id="backup-now" @onclick="Run">Back up now</button>
 
+<p>
+    <a id="export-all" href="/api/export">Export everything</a>: one zip with a CSV for every table,
+    every correction included, and every receipt as its original file. For an accountant or an audit.
+</p>
+
 @if (result is not null)
 {
     <p id="backup-result">Saved @System.IO.Path.GetFileName(result) in @System.IO.Path.GetDirectoryName(result)</p>

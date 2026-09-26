@@ -26,7 +26,7 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 
 ## Status
 
-**Slices 1, 1a, 2, and 3a are complete: the demo core, the container, measured energy, and the record.**
+**Slices 1, 1a, 2, 3a, and 3b are complete: the demo core, the container, measured energy, the record, and taxes and reports.** Only imports remain.
 
 | Requirement | What works |
 |---|---|
@@ -49,15 +49,24 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 | FR-27 | Receipts stored in the database with a SHA-256 that detects a changed file |
 | FR-28 | Business expenses by category |
 | NFR-7 | Dated backups of the whole ledger that never overwrite each other |
+| FR-21, FR-24 | Reports by day, week (Monday to Sunday), or any range, exported to CSV |
+| FR-29, FR-30 | The year's tax summary with both deduction methods side by side; the mileage rate entered per year, never built in |
+| FR-31 | The platform's 1099-NEC (by year) or 1099-K (by month) reconciled against the ledger |
+| FR-32 | A full export: a CSV per table with every version, each receipt as its original file, and a manifest |
 
 **Deferred, not built yet.** Nothing below is shown as working anywhere in the app.
 
 | Slice | Requirements |
 |---|---|
-| 3b. Tax and reports | FR-21 reports by range, FR-24 export to CSV, FR-29 to FR-31 annual tax summary, mileage rate by year, and 1099 reconciliation, FR-32 full export |
 | 3c. Imports | FR-22 charging receipts and FR-23 platform earnings from CSV. Waiting on a real export file from each; no importer is written against a guessed format |
 
 Expense and charge corrections are available through the API; the screens correct drives only so far.
+
+**The tax summary's split between the two methods is GigLedger's reading of the IRS rules, not tax
+advice.** Standard mileage is business miles times the year's rate, plus parking and tolls. Actual
+expenses are charging and vehicle costs times the business share of miles, plus parking and tolls.
+Phone and supplies stand apart. Confirm the method with a tax preparer before relying on it; the
+Taxes screen says the same.
 
 Energy cost now comes from the last 30 days of charging. Where that window is too thin to measure,
 the settings (4.0 mi/kWh, $0.69/kWh) stand in, and every number that uses them says so. The home

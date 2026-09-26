@@ -99,6 +99,13 @@ public static class LedgerApi
                 ? Results.Ok(r)
                 : Results.Problem($"No {year} tax form entered for {platform}.", statusCode: StatusCodes.Status404NotFound));
 
+        api.MapGet("/export", (IExportService export, TimeProvider clock) =>
+        {
+            var zip = new MemoryStream();
+            export.Export(zip);
+            return Results.File(zip.ToArray(), "application/zip", $"gigledger-export-{clock.GetLocalNow():yyyy-MM-dd}.zip");
+        });
+
         api.MapGet("/reports", (DateOnly from, DateOnly to, IReportService reports) =>
             Results.Ok(reports.Report(from, to)));
 
