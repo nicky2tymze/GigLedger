@@ -80,7 +80,9 @@ public sealed class ChargeSessionRow : LedgerRecord
     public int? EndSoc { get; set; }
     public string Charger { get; set; } = "";
     public ChargeType Type { get; set; }
-    public Purpose Purpose { get; set; }
+    public Purpose? Purpose { get; set; }
+    /// <summary>The receipt this session was imported from (FR-22); null when entered by hand.</summary>
+    public string? ReceiptNumber { get; set; }
 }
 
 public sealed class TipRow : LedgerRecord

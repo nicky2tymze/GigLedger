@@ -65,7 +65,7 @@
                 <td>@c.Session.Kwh.Value kWh</td>
                 <td>@Display.Money(c.Cost.Value) <span class="grade">@(c.Session.Cost?.Grade.ToString() ?? "Derived")</span></td>
                 <td>@Charge(c.Session.StartSoc) to @Charge(c.Session.EndSoc)</td>
-                <td>@c.Session.Type, @c.Session.Purpose</td>
+                <td>@c.Session.Type, @(c.Session.Purpose?.ToString() ?? "purpose unknown")</td>
             </tr>
         }
     </table>

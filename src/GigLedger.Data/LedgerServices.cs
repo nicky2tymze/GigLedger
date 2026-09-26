@@ -35,35 +35,55 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     public Guid Record(ChargeSession session) => AddCharge(session);
 
-    public ImportResult Import(string csv) => throw new NotImplementedException();
+    public ImportResult Import(string csv)
+    {
+        // Parse validates every row before anything is stored (SDD 6.7).
+        var sessions = ChargeImport.Parse(csv);
+
+        // Any version counts: a corrected session is still the receipt it came from.
+        var stored = db.ChargeSessions.AsNoTracking()
+            .Where(r => r.ReceiptNumber != null)
+            .Select(r => r.ReceiptNumber!)
+            .ToHashSet();
+
+        var fresh = sessions.Where(s => stored.Add(s.ReceiptNumber!)).ToList();
+        using var transaction = db.Database.BeginTransaction();
+        db.ChargeSessions.AddRange(fresh.Select(s => ToRow(s)));
+        db.SaveChanges();
+        transaction.Commit();
+        return new ImportResult(fresh.Count, sessions.Count - fresh.Count);
+    }
 
     private Guid AddCharge(ChargeSession session, Guid? supersedes = null, string? reason = null)
     {
         EnergyCalculations.Validate(session);
-        var row = new ChargeSessionRow
-        {
-            RecordedAt = clock.GetUtcNow(),
-            SupersedesId = supersedes,
-            CorrectionReason = reason,
-            At = session.At,
-            Odometer = session.Odometer?.Value, OdometerGrade = session.Odometer?.Grade,
-            Kwh = session.Kwh.Value, KwhGrade = session.Kwh.Grade,
-            Cost = session.Cost?.Value, CostGrade = session.Cost?.Grade,
-            StartSoc = session.StartSoc,
-            EndSoc = session.EndSoc,
-            Charger = session.Charger,
-            Type = session.Type,
-            Purpose = session.Purpose!.Value,
-        };
+        var row = ToRow(session, supersedes, reason);
         db.ChargeSessions.Add(row);
         db.SaveChanges();
         return row.Id;
     }
 
+    private ChargeSessionRow ToRow(ChargeSession session, Guid? supersedes = null, string? reason = null) => new()
+    {
+        RecordedAt = clock.GetUtcNow(),
+        SupersedesId = supersedes,
+        CorrectionReason = reason,
+        At = session.At,
+        Odometer = session.Odometer?.Value, OdometerGrade = session.Odometer?.Grade,
+        Kwh = session.Kwh.Value, KwhGrade = session.Kwh.Grade,
+        Cost = session.Cost?.Value, CostGrade = session.Cost?.Grade,
+        StartSoc = session.StartSoc,
+        EndSoc = session.EndSoc,
+        Charger = session.Charger,
+        Type = session.Type,
+        Purpose = session.Purpose,
+        ReceiptNumber = session.ReceiptNumber,
+    };
+
     private static ChargeSession ToSession(ChargeSessionRow r) => new(
         r.At, r.Odometer is { } odometer ? new Graded<decimal>(odometer, r.OdometerGrade!.Value) : null, new(r.Kwh, r.KwhGrade),
         r.Cost is { } cost ? new Graded<decimal>(cost, r.CostGrade!.Value) : null,
-        r.StartSoc, r.EndSoc, r.Charger, r.Type, r.Purpose);
+        r.StartSoc, r.EndSoc, r.Charger, r.Type, r.Purpose, r.ReceiptNumber);
 
     public IReadOnlyList<CostedCharge> Between(DateTimeOffset from, DateTimeOffset to) =>
         // Current versions only (FR-25), filtered in memory: SQLite cannot compare DateTimeOffset in SQL.

@@ -66,6 +66,12 @@ public static class LedgerApi
             return Results.Created($"/api/charges/{id}", new Created(id));
         });
 
+        api.MapPost("/charges/import", async (HttpRequest request, IChargeService charges) =>
+        {
+            using var body = new StreamReader(request.Body);
+            return Results.Ok(charges.Import(await body.ReadToEndAsync()));
+        });
+
         api.MapGet("/energy", (DateTimeOffset from, DateTimeOffset to, IChargeService charges) =>
             Results.Ok(charges.Report(from, to)));
 
