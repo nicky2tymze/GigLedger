@@ -9,15 +9,98 @@ namespace GigLedger.Data;
 public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
     : ISettingsService, IOfferService, ITripService, IShiftService, IChargeService
 {
-    // ---- Slice 2 (stubs until the tests are in) ----
+    // ---- Home rate (FR-5) ----
 
-    public HomeRate HomeRateOn(DateOnly date) => throw new NotImplementedException();
-    public void SetHomeRate(decimal perKwh, DateOnly effectiveFrom) => throw new NotImplementedException();
-    public Guid Record(ChargeSession session) => throw new NotImplementedException();
-    public IReadOnlyList<CostedCharge> Between(DateTimeOffset from, DateTimeOffset to) => throw new NotImplementedException();
-    EnergyReport IChargeService.Report(DateTimeOffset from, DateTimeOffset to) => throw new NotImplementedException();
-    public void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt) => throw new NotImplementedException();
-    TripReport ITripService.Report(Guid tripId) => throw new NotImplementedException();
+    public HomeRate HomeRateOn(DateOnly date)
+    {
+        var row = db.HomeRates.AsEnumerable()
+            .Where(r => r.EffectiveFrom <= date)
+            .OrderByDescending(r => r.EffectiveFrom).ThenByDescending(r => r.RecordedAt)
+            .FirstOrDefault() ?? throw new InvalidOperationException("No home rate is stored; the schema seed is missing.");
+        return new HomeRate(row.PerKwh, row.EffectiveFrom, row.IsPlaceholder);
+    }
+
+    public void SetHomeRate(decimal perKwh, DateOnly effectiveFrom)
+    {
+        if (perKwh < 0)
+            throw new ArgumentOutOfRangeException(nameof(perKwh), perKwh, "A rate cannot be negative.");
+        db.HomeRates.Add(new HomeRateRow { RecordedAt = clock.GetUtcNow(), PerKwh = perKwh, EffectiveFrom = effectiveFrom });
+        db.SaveChanges();
+    }
+
+    // ---- Charging (FR-5, FR-8, FR-9) ----
+
+    public Guid Record(ChargeSession session)
+    {
+        EnergyCalculations.Validate(session);
+        var row = new ChargeSessionRow
+        {
+            RecordedAt = clock.GetUtcNow(),
+            At = session.At,
+            Odometer = session.Odometer.Value, OdometerGrade = session.Odometer.Grade,
+            Kwh = session.Kwh.Value, KwhGrade = session.Kwh.Grade,
+            Cost = session.Cost?.Value, CostGrade = session.Cost?.Grade,
+            StartSoc = session.StartSoc,
+            EndSoc = session.EndSoc,
+            Charger = session.Charger,
+            Type = session.Type,
+            Purpose = session.Purpose,
+        };
+        db.ChargeSessions.Add(row);
+        db.SaveChanges();
+        return row.Id;
+    }
+
+    public IReadOnlyList<CostedCharge> Between(DateTimeOffset from, DateTimeOffset to) =>
+        // Filtered in memory: SQLite cannot compare DateTimeOffset in SQL.
+        db.ChargeSessions.AsEnumerable()
+            .Where(r => r.At >= from && r.At < to)
+            .OrderBy(r => r.At)
+            .Select(r => new ChargeSession(
+                r.At, new(r.Odometer, r.OdometerGrade), new(r.Kwh, r.KwhGrade),
+                r.Cost is { } cost ? new Graded<decimal>(cost, r.CostGrade!.Value) : null,
+                r.StartSoc, r.EndSoc, r.Charger, r.Type, r.Purpose))
+            .Select(s => new CostedCharge(s, EnergyCalculations.ChargeCost(s, HomeRateOn(DateOnly.FromDateTime(s.At.DateTime)))))
+            .ToList();
+
+    EnergyReport IChargeService.Report(DateTimeOffset from, DateTimeOffset to)
+    {
+        var charges = Between(from, to);
+        return new EnergyReport(
+            charges.Count,
+            EnergyCalculations.MeasuredEfficiency(charges.Select(c => c.Session).ToList()),
+            EnergyCalculations.Prices(charges));
+    }
+
+    /// <summary>FR-9a: the energy basis from the 30 days of charging before a moment.</summary>
+    private EnergyBasis EnergyBefore(DateTimeOffset moment) =>
+        EnergyCalculations.ForWindow(Between(moment.AddDays(-30), moment), Get());
+
+    // ---- Tips (FR-6, FR-17) and trip reports (FR-14, FR-16) ----
+
+    public void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt)
+    {
+        FindTrip(tripId);
+        if (amount < 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), amount, "A tip cannot be negative.");
+        if (FindTip(tripId) is not null)
+            throw new InvalidOperationException($"Trip {tripId} already has its tip; a tip is the whole trip's tip.");
+        db.Tips.Add(new TipRow { RecordedAt = clock.GetUtcNow(), TripId = tripId, Amount = amount, AmountGrade = Grade.Stated, PostedAt = postedAt });
+        db.SaveChanges();
+    }
+
+    TripReport ITripService.Report(Guid tripId)
+    {
+        var trip = ToStored(FindTrip(tripId));
+        var energy = EnergyBefore(FindShift(trip.ShiftId).StartedAt);
+        if (trip.Actuals is not { } actuals)
+            return new TripReport(trip, null, null, energy);
+        return new TripReport(
+            trip,
+            EnergyCalculations.TripRates(trip.Offer.Pay.Value, trip.Tip?.Value ?? 0m, actuals.Values, energy),
+            EnergyCalculations.EstimateError(trip.Offer, actuals.Values),
+            energy);
+    }
 
     // ---- Settings ----
 
@@ -41,14 +124,12 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
         db.SaveChanges();
     }
 
-    private static EnergyBasis Energy(Settings s) => EnergyBasis.FromDefaults(s.DefaultMilesPerKwh, s.DefaultPricePerKwh);
-
     // ---- Offers ----
 
     public OfferEvaluation Evaluate(Offer offer)
     {
         var settings = Get();
-        var forecast = Calculations.ForecastNetPerHour(offer, Energy(settings));
+        var forecast = Calculations.ForecastNetPerHour(offer, EnergyBefore(clock.GetUtcNow()));
         return new OfferEvaluation(forecast, Calculations.AcceptVerdict(forecast, settings.AcceptThreshold), settings.AcceptThreshold);
     }
 
@@ -122,7 +203,9 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
             new(a.ElapsedMinutes, a.ElapsedMinutesGrade),
             new(a.RouteMiles, a.RouteMilesGrade),
             new(a.ReturnMiles, a.ReturnMilesGrade));
-        return new StoredTrip(t.Id, t.ShiftId, offer, t.AcceptedAt, actuals);
+        var tip = FindTip(t.Id);
+        return new StoredTrip(t.Id, t.ShiftId, offer, t.AcceptedAt, actuals,
+            tip is null ? null : new Graded<decimal>(tip.Amount, tip.AmountGrade));
     }
 
     // ---- Shifts ----
@@ -191,12 +274,12 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
         {
             var a = FindActuals(t.Id)
                 ?? throw new InvalidOperationException($"Trip {t.Id} has no actuals; the shift cannot be summarized yet.");
-            trips.Add(new TripRecord(t.Pay, new TripActuals(a.ElapsedMinutes, a.RouteMiles, a.ReturnMiles)));
+            trips.Add(new TripRecord(t.Pay, new TripActuals(a.ElapsedMinutes, a.RouteMiles, a.ReturnMiles), FindTip(t.Id)?.Amount ?? 0m));
         }
 
         var minutes = (int)Math.Round((close.EndedAt - shift.StartedAt).TotalMinutes);
         var span = new ShiftSpan(minutes, shift.StartOdometer, close.EndOdometer);
-        return Calculations.SummarizeShift(span, trips, Energy(Get()));
+        return Calculations.SummarizeShift(span, trips, EnergyBefore(shift.StartedAt));
     }
 
     // ---- Lookups ----
@@ -212,4 +295,7 @@ public sealed class LedgerServices(LedgerContext db, TimeProvider clock)
 
     private TripActualsRow? FindActuals(Guid tripId) =>
         db.TripActuals.SingleOrDefault(a => a.TripId == tripId);
+
+    private TipRow? FindTip(Guid tripId) =>
+        db.Tips.SingleOrDefault(t => t.TripId == tripId);
 }

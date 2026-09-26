@@ -50,11 +50,38 @@ public static class LedgerApi
 
         api.MapGet("/trips/{id:guid}", (Guid id, ITripService trips) =>
             Results.Ok(trips.Get(id)));
+
+        api.MapPost("/trips/{id:guid}/tip", (Guid id, TipRequest request, ITripService trips) =>
+        {
+            trips.RecordTip(id, request.Amount, request.PostedAt);
+            return Results.NoContent();
+        });
+
+        api.MapGet("/trips/{id:guid}/report", (Guid id, ITripService trips) =>
+            Results.Ok(trips.Report(id)));
+
+        api.MapPost("/charges", (ChargeSession session, IChargeService charges) =>
+        {
+            var id = charges.Record(session);
+            return Results.Created($"/api/charges/{id}", new Created(id));
+        });
+
+        api.MapGet("/energy", (DateTimeOffset from, DateTimeOffset to, IChargeService charges) =>
+            Results.Ok(charges.Report(from, to)));
+
+        api.MapGet("/settings/home-rate", (DateOnly on, ISettingsService settings) =>
+            Results.Ok(settings.HomeRateOn(on)));
+
+        api.MapPost("/settings/home-rate", (HomeRateRequest request, ISettingsService settings) =>
+        {
+            settings.SetHomeRate(request.PerKwh, request.EffectiveFrom);
+            return Results.NoContent();
+        });
     }
 
     /// <summary>
     /// A refusal from the services becomes a status code with the reason in the body:
-    /// an unknown id is 404, bad input is 400, and a request that conflicts with what is
+    /// an unknown id is 404, bad input (any ArgumentException) is 400, and a request that conflicts with what is
     /// already stored (a second close, a summary of an open shift) is 409.
     /// </summary>
     private static async ValueTask<object?> RefusalsAsStatusCodes(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -67,7 +94,7 @@ public static class LedgerApi
         {
             return Results.Problem(e.Message, statusCode: StatusCodes.Status404NotFound);
         }
-        catch (ArgumentOutOfRangeException e)
+        catch (ArgumentException e)
         {
             return Results.Problem(e.Message, statusCode: StatusCodes.Status400BadRequest);
         }
