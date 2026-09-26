@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.5 · 2026-09-26 · DRAFT, for review. 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, and specifies the receipt import (FR-22) and the payout import (FR-23). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.5 · 2026-09-26 · DRAFT, for review. 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -173,7 +173,11 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   published figure, never hard-coded.
 - **FR-31 Platform reconciliation.** Total recorded payouts per platform per year can be compared
   against the platform's annual tax form (1099-K or 1099-NEC), and any difference is listed by
-  month.
+  month. **Which record:** where the platform's own payouts are imported for the year (FR-23),
+  they are the record, counted in the month of the transaction; otherwise the trips and tips
+  logged in GigLedger are. The two are never added together, since the export already contains
+  every logged trip. The reconciliation, and the gross in the tax summary (FR-29), name the source
+  they used.
 - **FR-32 Full export.** The entire ledger, including attachments, exports to an open format
   (CSV plus the attached files) for an accountant or an audit.
 

@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.5 · 2026-09-26 · DRAFT. Designs against SRS 0.5. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), and adds the charge import (6.7) and the payout import (6.8). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.5 · 2026-09-26 · DRAFT. Designs against SRS 0.5. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -212,8 +212,11 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   The rate is entered per tax year from the published figure; until it is, the standard method
   shows "rate not entered" rather than a number. GigLedger shows both methods and chooses neither.
 - **Reconciliation (FR-31).** The driver enters the platform's tax form: which form (1099-K or
-  1099-NEC), the annual total, and, for a 1099-K, the monthly amounts. Recorded payouts are trip pay
-  by the date the trip was accepted and tips by the date they posted. The difference is shown for
+  1099-NEC), the annual total, and, for a 1099-K, the monthly amounts. **Recorded payouts come from
+  one source per platform and year** (`PaymentSource`): the imported payouts (6.8) by transaction
+  month when any exist for that platform and year; otherwise trip pay by the date the trip was
+  accepted and tips by the date they posted. Never both. The tax summary's gross by platform uses
+  the same rule and carries the source per platform. The difference is shown for
   the year, and by month where the form gives months.
 - **Full export (FR-32).** One zip: a CSV per ledger table, every version included, and every
   receipt as its original file, named by its id.
