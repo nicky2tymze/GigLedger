@@ -8,7 +8,7 @@ namespace GigLedger.Data;
 /// (FR-34). They move data in and out; every calculation is delegated to Core.
 /// </summary>
 public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
-    : ISettingsService, IOfferService, ITripService, IShiftService, IChargeService
+    : ISettingsService, IOfferService, ITripService, IShiftService, IChargeService, IPayoutService
 {
     // ---- Home rate (FR-5) ----
 
@@ -34,6 +34,10 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
     // ---- Charging (FR-5, FR-8, FR-9) ----
 
     public Guid Record(ChargeSession session) => AddCharge(session);
+
+    ImportResult IPayoutService.Import(Stream xlsx) => throw new NotImplementedException();
+
+    IReadOnlyList<Payout> IPayoutService.Year(int year) => throw new NotImplementedException();
 
     public ImportResult Import(string csv)
     {
