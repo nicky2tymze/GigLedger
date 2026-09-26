@@ -24,9 +24,13 @@ requirement passes when GigLedger reproduces a number the log already computed b
 two disagreed, the disagreement was investigated before either was changed: the log's Sunday 08/02
 shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16), and the test says so.
 
+The importers were accepted the same way, against the author's real charging receipts and platform
+earnings export, both kept outside this repository. An import passes when the stored totals equal
+the file's own totals to the cent, and a second import of the same file stores nothing.
+
 ## Status
 
-**Slices 1, 1a, 2, 3a, and 3b are complete: the demo core, the container, measured energy, the record, and taxes and reports.** Only imports remain.
+**Every slice is complete: the demo core, the container, measured energy, the record, taxes and reports, and imports (Slices 1, 1a, 2, 3a, 3b, 3c).**
 
 | Requirement | What works |
 |---|---|
@@ -40,9 +44,9 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 | FR-33, FR-34 | A JSON API over the same services the screens use; the Web project computes nothing |
 | NFR-1, 3, 5, 6 | Tests first; local SQLite, no account; money is `decimal`; ISO dates |
 | NFR-4 | Docker image and a single-replica Kubernetes manifest, run and verified (below) |
-| FR-5 | Charge sessions with odometer, kWh, cost, state of charge, type, and purpose; home sessions costed at the home rate on their date |
+| FR-5 | Charge sessions with odometer, kWh, cost, state of charge, type, and purpose; home sessions costed at the home rate on their date. Odometer, state of charge, and purpose may be unknown, and unknown is stored as unknown, never as zero |
 | FR-6, FR-17 | One tip per trip; the trip's rates before and after it; shift gross includes tips |
-| FR-8 | Efficiency measured wall to wheel, with any state-of-charge mismatch named |
+| FR-8 | Efficiency measured wall to wheel between the first and last known odometer readings in time, counting the energy bought between them; a state-of-charge mismatch, or an unknown one, is named |
 | FR-9, FR-9a | Price per kWh home, fast, and blended, and the fast share of cost; shifts, trips, and offers use the 30 days of charging before them |
 | FR-16 | How far off the platform's time and mileage estimates were, per trip |
 | FR-26, FR-26a | The mileage log: every drive with where and why; a shift's span is logged as business when it ends |
@@ -51,16 +55,17 @@ shift rate turned out to be off by five cents (it rounded 4.15 hours up to 4.16)
 | NFR-7 | Dated backups of the whole ledger that never overwrite each other |
 | FR-21, FR-24 | Reports by day, week (Monday to Sunday), or any range, exported to CSV |
 | FR-29, FR-30 | The year's tax summary with both deduction methods side by side; the mileage rate entered per year, never built in |
-| FR-31 | The platform's 1099-NEC (by year) or 1099-K (by month) reconciled against the ledger |
-| FR-32 | A full export: a CSV per table with every version, each receipt as its original file, and a manifest |
+| FR-31 | The platform's 1099-NEC (by year) or 1099-K (by month) reconciled against the ledger, from one named source per platform and year: the imported payouts where they exist, otherwise the logged trips and tips, never both |
+| FR-32 | A full export: a CSV per table with every version, each receipt as its original file, and a manifest. The test takes the table list from the data model, so a new table cannot be left out |
+| FR-22 | Charging receipts imported from CSV, columns by name. The network's app offers no CSV export, so the CSV is built from its emailed receipts, one row each. All or nothing, with the failing line named; a receipt already stored is skipped |
+| FR-23 | The platform's earnings export (.xlsx) imported as payouts keyed by the platform's trip ID; the file must match its own summary total, and identical rows are matched by count on re-import |
 
-**Deferred, not built yet.** Nothing below is shown as working anywhere in the app.
+**Not built yet.** Nothing below is shown as working anywhere in the app.
 
-| Slice | Requirements |
-|---|---|
-| 3c. Imports | FR-22 charging receipts and FR-23 platform earnings from CSV. Waiting on a real export file from each; no importer is written against a guessed format |
-
-Expense and charge corrections are available through the API; the screens correct drives only so far.
+- Imports run through the API only; there is no import screen, and no screen lists payouts.
+- Imported payouts are not linked to trips logged in GigLedger. The reconciliation does not need
+  the link, and never adds the two together.
+- Expense and charge corrections are available through the API; the screens correct drives only so far.
 
 **The tax summary's split between the two methods is GigLedger's reading of the IRS rules, not tax
 advice.** Standard mileage is business miles times the year's rate, plus parking and tolls. Actual
@@ -85,6 +90,17 @@ defaults are stored as versions but cannot yet be changed from the screens or th
 - **The calculations are pure functions in `GigLedger.Core`,** with no storage or web dependency. The
   screens, the API, and the tests all get their numbers from the same place, and a structural test
   fails if multiplication or division appears in the Web project.
+- **Making a SQLite column nullable silently drops that table's triggers.** SQLite does it by
+  rebuilding the table, and the triggers go with the old one. The trigger test caught it. The first
+  fix, recreating the triggers in the same migration, failed too: EF runs the rebuild after the
+  migration's own SQL. The triggers are restored in a migration of their own, the pattern every
+  earlier table's triggers already followed. The migrations that make columns nullable
+  refuse to run backwards, since that would turn every unknown into a zero.
+- **An import reads the file it was given, not a guessed format.** Each importer was written after
+  a real file arrived. The earnings export stores money as binary floating point, where 0.1 + 0.2
+  is 0.30000000000000004, and its own summary total is not an exact number of cents. Amounts are
+  rounded to the cent, and the rows are checked against that total. The .xlsx reader uses only the
+  framework's zip and XML readers.
 - **A check has to be able to fail.** Structural tests are first shown failing on a planted
   violation. Three API tests that passed before any endpoint existed (every URL was already a 404)
   were tightened until they could only pass against a real endpoint.
@@ -146,6 +162,20 @@ stands either way. The fixed image was confirmed running when Slice 2 was deploy
 and its new endpoints answered. Two defects surfaced only by running it, both fixed: the data folder
 was root-owned, so the first write would have failed, and a user named rather than numbered made
 Kubernetes refuse to start the pod under `runAsNonRoot`.
+
+Slice 3c's migrations were run against that same volume and then checked in the database itself,
+not assumed: the earlier rows were intact, the changed columns now allowed nulls, and the
+append-only triggers were back on the rebuilt table.
+
+### Importing
+
+```
+curl -X POST -H "Content-Type: text/csv" --data-binary @receipts.csv http://localhost:8080/api/charges/import
+curl -X POST --data-binary @earnings_export.xlsx http://localhost:8080/api/payouts/import
+```
+
+Each answers with the number imported and the number skipped as already stored, or 400 with the
+line or row that stopped the file. Nothing is stored from a refused file.
 
 ## Stack
 
