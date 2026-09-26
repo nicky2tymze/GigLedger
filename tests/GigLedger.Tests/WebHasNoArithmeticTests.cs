@@ -64,6 +64,8 @@ public partial class WebHasNoArithmeticTests
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                      && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
             .ToList();
+        if (files.Count == 0)
+            throw new InvalidOperationException($"No .cs or .razor files under {root}: a scan of nothing proves nothing.");
         return files
             .SelectMany(f => Scan(File.ReadAllText(f)).Select(hit => $"{Path.GetRelativePath(root, f)}: {hit}"))
             .ToList();
