@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.5 · 2026-09-26 · DRAFT. Designs against SRS 0.5. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.6 · 2026-09-27 · DRAFT. Designs against SRS 0.5. 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -48,8 +48,9 @@ inputs, so they are tested without a database, and the same numbers come out of 
 and the tests.
 
 **One host serves both clients (FR-34).** Blazor pages and API endpoints both call the services in
-Core through dependency injection. Neither contains a calculation. A test enforces this: the Web
-project must not contain arithmetic on money types (section 9.4).
+Core through dependency injection. Neither contains a calculation. A test enforces this: no Web
+source file may multiply or divide, on any type (TC-34, section 9.4). Addition and subtraction are
+not checked.
 
 ## 4. Domain model
 
@@ -337,7 +338,8 @@ one is corrected: the hand log has been wrong before, and so can the code.
   scanning every Web source file, with comments, strings, and markup removed, for multiplication or
   division, which every rate, cost, and share needs. **It does not see addition or subtraction**, so
   a sum computed in Web would pass it; the API tests close part of that gap by comparing each
-  response to Core's own result.
+  response to Core's own result. A scan that finds no Web files fails rather than passing: zero
+  files scanned is not zero offenders.
 - **TC-NFR5:** no `double` or `float` appears in a Core money path.
 
 Each structural test is first shown to fail on a deliberately planted violation, then the plant is
