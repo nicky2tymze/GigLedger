@@ -73,6 +73,30 @@ public sealed class DeclinePageTests : TestContext
         return page;
     }
 
+    // ---- Entry (found in the live check, 2026-10-03) ----
+
+    [Fact]
+    public void UI_Offer_TheItemsBoxStartsBlank()
+    {
+        var page = RenderComponent<OfferPage>();
+        Assert.Equal("", page.Find("#items").GetAttribute("value") ?? "");
+    }
+
+    [Fact]
+    public void UI_Offer_BlankItemsIsAskedForNotTakenAsZero()
+    {
+        // The unknown rule: a blank is unknown, never 0.
+        var page = RenderComponent<OfferPage>();
+        page.Find("#pay").Change("32.89");
+        page.Find("#stated-miles").Change("4.1");
+        page.Find("#est-minutes").Change("64");
+
+        page.Find("#evaluate").Click();
+
+        Assert.Contains("items", page.Find(".error").TextContent);
+        Assert.Empty(page.FindAll("#forecast"));
+    }
+
     // ---- Declining (FR-2a) ----
 
     [Fact]

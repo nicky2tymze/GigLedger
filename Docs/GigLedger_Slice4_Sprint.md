@@ -97,3 +97,9 @@ At close: what this slice did badly.
   were each shown failing on a planted violation. Suite 300 passed. An existing test caught Declines
   missing from the full export (FR-32); fixed. Removed `UI_Offer_WithoutAnOpenShiftThereIsNothingToAcceptInto`,
   which asserted the behaviour FR-2b reverses.
+- 2026-10-03: **Story 1 ACCEPTED (the Architect)** after a live check on a scratch database: accept with no
+  shift started the shift and recorded the trip at the same moment; a decline stored two reasons in order;
+  "Other" with no note was refused; the Reports declines table matched. Found in the check and fixed (tests
+  first): the Items box started at 0; it now starts blank and is asked for, never taken as 0. Drops keeps
+  its default of 1 (his). Also found: launched without a development environment, the app does not serve
+  its scoped stylesheet, so the error bar shows permanently; a launch fault, not a code fault.

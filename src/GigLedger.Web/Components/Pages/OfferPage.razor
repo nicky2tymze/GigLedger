@@ -75,8 +75,8 @@
 
 @code {
     private decimal? pay, statedMiles, returnOverride;
-    private int drops = 1, items;
-    private int? estMinutes;
+    private int drops = 1;
+    private int? items, estMinutes;
 
     private Core.Offer? offer;
     private OfferEvaluation? evaluation;
@@ -93,9 +93,9 @@
     {
         error = null;
         evaluation = null;
-        if (pay is null || statedMiles is null || estMinutes is null)
+        if (pay is null || statedMiles is null || items is null || estMinutes is null)
         {
-            error = "Enter the pay, the stated miles, and their time estimate.";
+            error = "Enter the pay, the stated miles, the items, and their time estimate.";
             return;
         }
         try
@@ -104,7 +104,7 @@
                 new(pay.Value, Grade.Stated),
                 new(statedMiles.Value, Grade.Stated),
                 drops,
-                items,
+                items.Value,
                 new(estMinutes.Value, Grade.Stated),
                 Clock.GetLocalNow(),
                 returnOverride);
