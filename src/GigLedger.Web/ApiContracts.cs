@@ -46,3 +46,6 @@ public sealed record ActualsRequest(Graded<int> ElapsedMinutes, Graded<decimal> 
 
 /// <summary>FR-6a: the moment all of a trip's tips are in.</summary>
 public sealed record TipsInRequest(DateTimeOffset At);
+
+/// <summary>FR-6a: the promised tip, added after accept or changed (a change needs the reason).</summary>
+public sealed record PromisedTipRequest(decimal Amount, string? Reason = null, Acknowledgement? Acknowledgement = null);

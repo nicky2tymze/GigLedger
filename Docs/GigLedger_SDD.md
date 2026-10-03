@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.9 · 2026-10-03 · DRAFT. Designs against SRS 0.8. 0.9 adds section 6.11, tip tracking, and replaces the tip rule in 6.5 (Slice 4, story 3). 0.8 adds section 6.10, entry checks (Slice 4, story 2). 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.10 · 2026-10-03 · DRAFT. Designs against SRS 0.9. 0.10 drops the TrackTips setting from 6.11 and lets the promised tip be added or changed after accept. 0.9 adds section 6.11, tip tracking, and replaces the tip rule in 6.5 (Slice 4, story 3). 0.8 adds section 6.10, entry checks (Slice 4, story 2). 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -361,12 +361,25 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   line is now the tips counted in gross), and so the reports. No calculation is duplicated.
 - **Tax months (FR-31, no import).** Untracked or pending: the gross in the month accepted. All in:
   the base in the month accepted and each posted tip in the month it posted.
-- **The setting.** `Settings` gains `TrackTips` (default off), stored with the other settings as a
-  new version. It changes the screens only: the services accept a promised tip either way.
-- **Interfaces.** `POST /api/trips/{id}/tips-in` (`MarkAllTipsIn`); `GET` and `POST /api/settings`.
+- **Adding or changing the promised tip after accept (SRS 0.9).** A new append-only table,
+  `PromisedTips` (trip, amount, grade), triggers in their own migration. The trip's promised tip is the
+  newest `PromisedTips` row for it that nothing supersedes, otherwise the value stored at accept. Each
+  new row supersedes the trip's previous one and carries the reason. `ITripService.SetPromisedTip(tripId,
+  amount, reason, acknowledgement)`: the same refusals and tip-limit check as at accept; a change to a trip
+  that already has a promised tip needs a non-blank reason, and so does adding one once the trip's shift
+  is closed; adding one to a blank on an open shift needs none. Allowed
+  after *all tips in*. The tax months read the current promised tip, like everything else. There is no
+  way to remove a promised tip once entered (not asked for).
+- **No setting (SRS 0.9).** The promised-tip field is always on the Offer page; a trip with a promised
+  tip is tracked. 0.9 had a `TrackTips` setting; its column stays in the `Settings` table, unused and
+  always false, because the migration that added it is published and the table is append-only.
+- **Interfaces.** `POST /api/trips/{id}/tips-in` (`MarkAllTipsIn`); `POST /api/trips/{id}/promised-tip`
+  (`SetPromisedTip`); `GET` and `POST /api/settings` (the
+  accept threshold and the energy defaults).
   `StoredTrip` gains `PromisedTip`, `AllTipsIn`, and the computed tip state.
-- **Screens.** A Settings page with the **Track tips** switch. With it on, the Offer page has a
-  **Promised tip** field ("open the offer to see it"). The Shift page shows a tracked trip's tip as
+- **Screens.** The Offer page always has a **Promised tip** field ("the total tip, open the offer to
+  see it"). The Shift page's tip line has **Add tip** on an untracked trip and **Change tip**, with a
+  reason box, on a tracked one. The Shift page shows a tracked trip's tip as
   *pending* or *all in* with the adjustment, records posted tips at any time, and shows **All tips
   in** only once it opens.
 

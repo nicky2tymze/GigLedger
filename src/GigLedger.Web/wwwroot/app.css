@@ -45,3 +45,13 @@ button { padding: .45rem .9rem; font-size: 1rem; cursor: pointer; }
 table { border-collapse: collapse; margin: .6rem 0; }
 td, th { padding: .3rem .7rem; border-bottom: 1px solid #eee; text-align: left; }
 table.summary td { text-align: right; font-variant-numeric: tabular-nums; }
+/* A trip's tip on its own line under the trip (SDD 6.11). */
+tr.trip td { border-bottom: none; }
+tr.trip-tip td { padding: .1rem .7rem .7rem; border-bottom: 1px solid #ddd; }
+.tip-line { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.1rem; font-size: .95rem; }
+.tip-line .tip-entry { display: inline-flex; gap: .4rem; align-items: center; }
+.tip-line .tip-entry input { width: 7rem; padding: .3rem .5rem; font-size: .95rem; }
+.tip-line .tips-in { margin-left: auto; }
+.badge { font-size: .8rem; padding: .05rem .55rem; border-radius: 999px; border: 1px solid; }
+.badge.pending { color: #7a5200; border-color: #d9a400; background: #fff7e0; }
+.badge.all-in { color: #1b6e20; border-color: #7cc47f; background: #eef8ee; }

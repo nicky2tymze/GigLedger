@@ -135,6 +135,35 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         db.SaveChanges();
     }
 
+    public void SetPromisedTip(Guid tripId, decimal amount, string? reason = null, Acknowledgement? acknowledgement = null)
+    {
+        var row = FindTrip(tripId);
+        TipAccounting.RefuseImpossiblePromise(row.Pay, amount);
+        var previous = CurrentPromisedTip(tripId);
+        var why = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        // FR-25: a change carries a reason; so does filling the blank once the shift is closed (the Architect).
+        if (why is null && (previous is not null || row.PromisedTip is not null))
+            throw new ArgumentException("Changing the tip needs a one-line reason.", nameof(reason));
+        if (why is null && FindClose(row.ShiftId) is not null)
+            throw new ArgumentException("The shift is closed: adding the tip now needs a one-line reason.", nameof(reason));
+
+        CheckAndMark(MarkedRecord.Trip, tripId, acknowledgement, (EntryLimit.Tip, amount));
+        db.PromisedTips.Add(new PromisedTipRow
+        {
+            RecordedAt = clock.GetUtcNow(),
+            SupersedesId = previous?.Id,
+            CorrectionReason = why,
+            TripId = tripId,
+            Amount = amount,
+            AmountGrade = Grade.Stated,
+        });
+        db.SaveChanges();
+    }
+
+    /// <summary>The newest promised tip set after accept that nothing supersedes, if any (SDD 6.11).</summary>
+    private PromisedTipRow? CurrentPromisedTip(Guid tripId) =>
+        Current(db.PromisedTips.AsNoTracking().Where(p => p.TripId == tripId)).SingleOrDefault();
+
     public void MarkAllTipsIn(Guid tripId, DateTimeOffset at)
     {
         var trip = ToStored(FindTrip(tripId));
@@ -169,7 +198,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         // The version nothing supersedes, not the latest timestamp: two in one instant would tie.
         var current = Current(db.Settings.AsNoTracking()).SingleOrDefault()
             ?? throw new InvalidOperationException("No settings are stored; the schema seed is missing.");
-        return new Settings(current.AcceptThreshold, current.DefaultMilesPerKwh, current.DefaultPricePerKwh, current.TrackTips);
+        return new Settings(current.AcceptThreshold, current.DefaultMilesPerKwh, current.DefaultPricePerKwh);
     }
 
     public void Set(Settings settings)
@@ -181,7 +210,6 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             AcceptThreshold = settings.AcceptThreshold,
             DefaultMilesPerKwh = settings.DefaultMilesPerKwh,
             DefaultPricePerKwh = settings.DefaultPricePerKwh,
-            TrackTips = settings.TrackTips,
         });
         db.SaveChanges();
     }
@@ -347,7 +375,8 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             new(t.EstimatedMinutes, t.EstimatedMinutesGrade),
             t.OfferedAt,
             t.ReturnMilesOverride,
-            t.PromisedTip is { } promised ? new Graded<decimal>(promised, t.PromisedTipGrade!.Value) : null);
+            CurrentPromisedTip(t.Id) is { } set ? new Graded<decimal>(set.Amount, set.AmountGrade)
+                : t.PromisedTip is { } promised ? new Graded<decimal>(promised, t.PromisedTipGrade!.Value) : null);
         var a = FindActuals(t.Id);
         var actuals = a is null ? null : new GradedActuals(
             new(a.ElapsedMinutes, a.ElapsedMinutesGrade),

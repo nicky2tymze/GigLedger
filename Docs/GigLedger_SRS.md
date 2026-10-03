@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.8 · 2026-10-03 · DRAFT, for review. 0.8 makes an offer's pay the total the platform shows, tip included, and **reverses 0.2's tip rule** (FR-6): a recorded tip is never added on top of that total; optional tip tracking (FR-6a) records the promised tip and what posts. 0.7 adds entry checks (section 5.9, FR-35 to FR-38): values past a limit are confirmed or explained, never silently stored, and values that cannot be true are refused. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.9 · 2026-10-03 · DRAFT, for review. 0.9 drops the tip-tracking setting: the accept screen always offers the promised tip, and entering it is what tracks a trip; the tip can be added or changed after accept (FR-6a). 0.8 makes an offer's pay the total the platform shows, tip included, and **reverses 0.2's tip rule** (FR-6): a recorded tip is never added on top of that total; optional tip tracking (FR-6a) records the promised tip and what posts. 0.7 adds entry checks (section 5.9, FR-35 to FR-38): values past a limit are confirmed or explained, never silently stored, and values that cannot be true are refused. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -99,8 +99,16 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   the tip (FR-1); without tip tracking (FR-6a) it is kept as a record only.
   **Reversal (0.8):** 0.2 decided one tip per trip, added to pay. Measured against how pay is entered,
   that counts every tip twice. The tip lives inside the pay.
-- **FR-6a Tip tracking (optional, off by default).** A setting. When on, the driver enters the
-  **promised tip** at accept, read from the opened offer; it cannot exceed the pay. The trip's
+- **FR-6a Tip tracking.** The accept screen always offers the **promised tip**: the total tip across
+  all drops, read from the opened offer. It is optional, and it cannot exceed the pay. Entering it is
+  what tracks the trip (0.9: the on/off setting of 0.8 is dropped, the Architect, 2026-10-03). **Every
+  tip field is optional:** with none used, the whole pay counts as the platform's fee and nothing as
+  tip; a driver who does not want the split for taxes need not enter it. The promised tip can be
+  **added after accept** (no reason needed while the shift is open: it fills a blank) or **changed**
+  (with a one-line reason, FR-25), at any time, including after *all tips in*; the gross and the
+  adjustment follow. **Adding it after the trip's shift has closed needs the reason too** (the Architect,
+  2026-10-03: "to add a tip after a shift is complete, requires explanation"). Posted tips need none:
+  they normally arrive after the shift. The trip's
   **base** is pay minus the promised tip. The trip shows **tip pending** until the driver marks it
   **all tips in**; until then its gross is the pay. Once marked, its gross is the base plus the
   posted tips, and the **adjustment** (posted minus promised) is shown. A trip accepted without a

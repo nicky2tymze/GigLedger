@@ -106,10 +106,12 @@ public sealed partial class LedgerServices : ITaxService
         var any = false;
         foreach (var t in trips)
         {
-            var tracked = t.PromisedTip is not null && allIn.Contains(t.Id);
+            // The current promised tip: one set after accept wins over the one stored at accept.
+            var promised = ToStored(t).Offer.PromisedTip?.Value;
+            var tracked = promised is not null && allIn.Contains(t.Id);
             if (t.AcceptedAt.DateTime.Year == year)
             {
-                months[t.AcceptedAt.DateTime.Month - 1] += tracked ? t.Pay - t.PromisedTip!.Value : t.Pay;
+                months[t.AcceptedAt.DateTime.Month - 1] += tracked ? t.Pay - promised!.Value : t.Pay;
                 any = true;
             }
             if (!tracked) continue;

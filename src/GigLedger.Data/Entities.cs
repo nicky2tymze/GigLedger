@@ -52,6 +52,14 @@ public sealed class TripRow : LedgerRecord
     public Grade? PromisedTipGrade { get; set; }
 }
 
+/// <summary>FR-6a: the promised tip added or changed after accept. Each supersedes the trip's previous one.</summary>
+public sealed class PromisedTipRow : LedgerRecord
+{
+    public Guid TripId { get; set; }
+    public decimal Amount { get; set; }
+    public Grade AmountGrade { get; set; }
+}
+
 /// <summary>FR-6a: the moment a trip's tips were marked final.</summary>
 public sealed class TipsInRow : LedgerRecord
 {
@@ -131,7 +139,10 @@ public sealed class SettingsRow : LedgerRecord
     public decimal AcceptThreshold { get; set; }
     public decimal DefaultMilesPerKwh { get; set; }
     public decimal DefaultPricePerKwh { get; set; }
-    /// <summary>FR-6a, SRS 0.8. False on every version stored before it existed.</summary>
+    /// <summary>
+    /// Retired (SRS 0.9 dropped the tip-tracking setting). The column stays, always false: the migration that
+    /// added it is published and the table is append-only, so it is not rewritten.
+    /// </summary>
     public bool TrackTips { get; set; }
 }
 

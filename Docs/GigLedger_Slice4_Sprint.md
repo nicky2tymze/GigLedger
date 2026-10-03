@@ -130,3 +130,12 @@ At close: what this slice did badly.
   the new rule, keeping its purpose (the ones about tips being counted now use a tracked trip with all
   tips in). EF generated an UPDATE on the seeded settings row; the append-only triggers refuse it, so it
   was removed by hand, as in RecordKeeping. Suite 388 passed.
+- 2026-10-03: **Story 3 changed during its live check (the Architect).** The tip display was jammed into
+  the trip row; it now has its own line. The tip field is always on the accept screen (the total tip):
+  the Track tips setting is dropped (its column stays, unused; the migration is published). Every tip
+  field is optional; unused, the whole pay counts as the fee. The promised tip can be added after accept
+  (no reason while the shift is open) or changed (reason required), and adding it after the shift closed
+  needs a reason too. SRS 0.9, SDD 0.10. 13 tests first, all failed; suite 400 passed.
+- **Backlog, not built (his):** cash tips. He will not record the few he gets; other drivers might want
+  them. Raised here so the idea is not lost.
+- 2026-10-03: **Story 3 ACCEPTED (the Architect)** after the live check and the changes above.

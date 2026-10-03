@@ -75,6 +75,12 @@ public static class LedgerApi
             return Results.NoContent();
         });
 
+        api.MapPost("/trips/{id:guid}/promised-tip", (Guid id, PromisedTipRequest request, ITripService trips) =>
+        {
+            trips.SetPromisedTip(id, request.Amount, request.Reason, request.Acknowledgement);
+            return Results.NoContent();
+        });
+
         api.MapGet("/settings", (ISettingsService settings) => Results.Ok(settings.Get()));
 
         api.MapPost("/settings", (Settings request, ISettingsService settings) =>

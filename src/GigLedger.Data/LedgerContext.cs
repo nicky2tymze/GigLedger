@@ -16,6 +16,7 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
     public DbSet<ChargeSessionRow> ChargeSessions => Set<ChargeSessionRow>();
     public DbSet<TipRow> Tips => Set<TipRow>();
     public DbSet<TipsInRow> TipsIn => Set<TipsInRow>();
+    public DbSet<PromisedTipRow> PromisedTips => Set<PromisedTipRow>();
     public DbSet<HomeRateRow> HomeRates => Set<HomeRateRow>();
     public DbSet<DriveRow> Drives => Set<DriveRow>();
     public DbSet<ExpenseRow> Expenses => Set<ExpenseRow>();
@@ -50,6 +51,7 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         model.Entity<TripActualsRow>().HasIndex(r => r.TripId);
         model.Entity<TipRow>().HasIndex(r => r.TripId);
         model.Entity<TipsInRow>().HasIndex(r => r.TripId);
+        model.Entity<PromisedTipRow>().HasIndex(r => r.TripId);
         model.Entity<DriveRow>().HasIndex(r => r.ShiftId);
         model.Entity<AttachmentRow>().HasIndex(r => new { r.Owner, r.OwnerId });
         model.Entity<PayoutRow>().HasIndex(r => new { r.Platform, r.TripId });

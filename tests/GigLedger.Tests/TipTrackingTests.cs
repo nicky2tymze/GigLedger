@@ -158,14 +158,6 @@ public sealed class TipTrackingStorageTests : IDisposable
     // ---- FR-6a: tracking ----
 
     [Fact]
-    public void FR6a_TheTrackTipsSettingIsOffByDefaultAndCanBeTurnedOn()
-    {
-        Assert.False(Settings.Get().TrackTips);
-        Settings.Set(Settings.Get() with { TrackTips = true });
-        Assert.True(Settings.Get().TrackTips);
-    }
-
-    [Fact]
     public void FR6a_ThePromisedTipIsStoredWithTheTrip()
     {
         var (_, trip) = TripWithActuals(Total(34.89m, 8m));
@@ -321,12 +313,12 @@ public sealed class TipTrackingApiTests : IDisposable
     }
 
     [Fact]
-    public async Task API_SettingsCanBeReadAndTrackTipsTurnedOn()
+    public async Task API_SettingsCanBeReadAndSet()
     {
         var settings = await _http.GetFromJsonAsync<Settings>("/api/settings", Json);
-        Assert.False(settings!.TrackTips);
-        (await _http.PostAsJsonAsync("/api/settings", settings with { TrackTips = true }, Json)).EnsureSuccessStatusCode();
-        Assert.True((await _http.GetFromJsonAsync<Settings>("/api/settings", Json))!.TrackTips);
+        Assert.Equal(Core.Settings.Initial, settings);
+        (await _http.PostAsJsonAsync("/api/settings", settings! with { AcceptThreshold = 30m }, Json)).EnsureSuccessStatusCode();
+        Assert.Equal(30m, (await _http.GetFromJsonAsync<Settings>("/api/settings", Json))!.AcceptThreshold);
     }
 
     [Fact]
@@ -379,8 +371,6 @@ public sealed class TipTrackingPageTests : TestContext
     private IOfferService Offers => _ledger;
     private ITripService Trips => _ledger;
 
-    private void TrackTips() => Settings.Set(Settings.Get() with { TrackTips = true });
-
     private Guid TrackedTrip()
     {
         var shift = Shifts.Start("Spark", T0, new(17_000m, Grade.Measured));
@@ -391,24 +381,31 @@ public sealed class TipTrackingPageTests : TestContext
     }
 
     [Fact]
-    public void UI_Settings_TheSwitchTurnsTipTrackingOn()
+    public void UI_Offer_ThePromisedTipFieldIsAlwaysThere()
     {
-        var page = RenderComponent<SettingsPage>();
-        page.Find("#track-tips").Change(true);
-        Assert.True(Settings.Get().TrackTips);
-    }
-
-    [Fact]
-    public void UI_Offer_WithTrackingOffThereIsNoPromisedTipField()
-    {
+        // SRS 0.9: no setting gates it.
         var page = RenderComponent<OfferPage>();
-        Assert.Empty(page.FindAll("#promised-tip"));
+        Assert.NotEmpty(page.FindAll("#promised-tip"));
     }
 
     [Fact]
-    public void UI_Offer_WithTrackingOnThePromisedTipIsStoredWithTheTrip()
+    public void UI_Offer_ABlankPromisedTipLeavesTheTripUntracked()
     {
-        TrackTips();
+        var shift = Shifts.Start("Spark", T0, new(17_000m, Grade.Measured));
+        var page = RenderComponent<OfferPage>();
+        page.Find("#pay").Change("34.89");
+        page.Find("#stated-miles").Change("6.6");
+        page.Find("#items").Change("32");
+        page.Find("#est-minutes").Change("58");
+        page.Find("#evaluate").Click();
+        page.Find("#accept").Click();
+
+        Assert.Null(Assert.Single(Trips.OnShift(shift)).Offer.PromisedTip);
+    }
+
+    [Fact]
+    public void UI_Offer_ThePromisedTipIsStoredWithTheTrip()
+    {
         var shift = Shifts.Start("Spark", T0, new(17_000m, Grade.Measured));
         var page = RenderComponent<OfferPage>();
         page.Find("#pay").Change("34.89");
@@ -425,20 +422,18 @@ public sealed class TipTrackingPageTests : TestContext
     [Fact]
     public void UI_Shift_ATrackedTripShowsPendingAndHidesAllTipsInFor24Hours()
     {
-        TrackTips();
         TrackedTrip();
         _clock.Now = T0.AddHours(20);
 
         var page = RenderComponent<Home>();
 
-        Assert.Contains("tip pending", page.Find("tr.trip").TextContent);
+        Assert.Contains("tip pending", page.Find("tr.trip-tip").TextContent);
         Assert.Empty(page.FindAll("#tips-in-0"));
     }
 
     [Fact]
     public void UI_Shift_After24HoursAllTipsInMarksTheTrip()
     {
-        TrackTips();
         var trip = TrackedTrip();
         _clock.Now = T0.AddMinutes(58).AddHours(24);
 
@@ -446,6 +441,6 @@ public sealed class TipTrackingPageTests : TestContext
         page.Find("#tips-in-0").Click();
 
         Assert.True(Trips.Get(trip).AllTipsIn);
-        Assert.Contains("all tips in", page.Find("tr.trip").TextContent);
+        Assert.Contains("all tips in", page.Find("tr.trip-tip").TextContent);
     }
 }

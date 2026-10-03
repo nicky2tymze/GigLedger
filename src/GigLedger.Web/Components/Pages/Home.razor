@@ -74,35 +74,10 @@ else
                         <td>@Display.PerMile(Calculations.TruePerMile(trip.Offer.Pay.Value, a.Values).Value)</td>
                         <td>@Display.Share(Calculations.DeadheadShare(a.Values).Value) unpaid</td>
                         <td>net <span id="@($"net-{index}")">@Display.Rate(reports[index].Rates!.NetPerHour.Value)</span></td>
-                        <td>
-                            @if (trip.Tips is { Tracked: true } state)
-                            {
-                                @if (state.Pending)
-                                {
-                                    <span>tip pending: promised @Display.Money(trip.Offer.PromisedTip!.Value.Value), posted @Display.Money(state.Posted)</span>
-                                    @if (Clock.GetUtcNow() >= trip.AllTipsInOpensAt)
-                                    {
-                                        <button id="@($"tips-in-{index}")" @onclick="() => MarkAllTipsIn(index)">All tips in</button>
-                                    }
-                                }
-                                else
-                                {
-                                    <span>all tips in: posted @Display.Money(state.Posted), @Display.Money(state.Adjustment!.Value) against the promise</span>
-                                }
-                            }
-                            else if (trip.Tip is { } tip)
-                            {
-                                <span>tips posted @Display.Money(tip.Value)</span>
-                            }
-                        </td>
-                        <td class="form">
-                            <input id="@($"tip-{index}")" type="number" step="0.01" placeholder="tip posted" @bind="tips[index]" />
-                            <button id="@($"save-tip-{index}")" @onclick="() => SaveTip(index)">Save tip</button>
-                        </td>
                     }
                     else
                     {
-                        <td colspan="4" class="form">
+                        <td colspan="5" class="form">
                             <input id="@($"minutes-{index}")" type="number" placeholder="minutes" @bind="actuals[index].Minutes" />
                             <input id="@($"route-{index}")" type="number" step="0.1" placeholder="route mi" @bind="actuals[index].Route" />
                             <input id="@($"return-{index}")" type="number" step="0.1" placeholder="return mi" @bind="actuals[index].Return" />
@@ -110,6 +85,63 @@ else
                         </td>
                     }
                 </tr>
+                @if (trip.Actuals is not null)
+                {
+                    @* The trip's tip on a line of its own (FR-6, FR-6a): status, amounts, entry, then the final mark. *@
+                    <tr class="trip-tip">
+                        <td colspan="8">
+                            <div class="tip-line">
+                                @if (trip.Tips is { Tracked: true } state)
+                                {
+                                    @if (state.Pending)
+                                    {
+                                        <span class="badge pending">tip pending</span>
+                                        <span>promised <strong>@Display.Money(trip.Offer.PromisedTip!.Value.Value)</strong></span>
+                                        <span>posted <strong>@Display.Money(state.Posted)</strong></span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge all-in">all tips in</span>
+                                        <span>promised <strong>@Display.Money(trip.Offer.PromisedTip!.Value.Value)</strong></span>
+                                        <span>posted <strong>@Display.Money(state.Posted)</strong></span>
+                                        <span>@Display.Money(state.Adjustment!.Value) against the promise</span>
+                                    }
+                                }
+                                else if (trip.Tip is { } tip)
+                                {
+                                    <span>tips posted <strong>@Display.Money(tip.Value)</strong> <span class="hint">(inside the pay)</span></span>
+                                }
+                                else
+                                {
+                                    <span class="hint">No tip posted yet.</span>
+                                }
+                                <span class="tip-entry">
+                                    <input id="@($"tip-{index}")" type="number" step="0.01" placeholder="tip posted" @bind="tips[index]" />
+                                    <button id="@($"save-tip-{index}")" @onclick="() => SaveTip(index)">Save tip</button>
+                                </span>
+                                <span class="tip-entry">
+                                    <input id="@($"promised-{index}")" type="number" step="0.01" placeholder="tip from the offer" @bind="promised[index].Amount" />
+                                    @if (trip.Offer.PromisedTip is not null)
+                                    {
+                                        <input id="@($"promised-reason-{index}")" placeholder="reason for the change" @bind="promised[index].Reason" />
+                                    }
+                                    <button id="@($"set-promised-{index}")" @onclick="() => SetPromisedTip(index)">@(trip.Offer.PromisedTip is null ? "Add tip" : "Change tip")</button>
+                                </span>
+                                @if (trip.Tips is { Tracked: true, Pending: true })
+                                {
+                                    @if (Clock.GetUtcNow() >= trip.AllTipsInOpensAt)
+                                    {
+                                        <button id="@($"tips-in-{index}")" class="tips-in" @onclick="() => MarkAllTipsIn(index)">All tips in</button>
+                                    }
+                                    else
+                                    {
+                                        <span class="hint tips-in">All tips in from @Display.Time(trip.AllTipsInOpensAt)</span>
+                                    }
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
             }
         </table>
 
@@ -123,6 +155,12 @@ else
 }
 
 @code {
+    private sealed class PromisedInput
+    {
+        public decimal? Amount { get; set; }
+        public string? Reason { get; set; }
+    }
+
     private sealed class ActualsInput
     {
         public int? Minutes { get; set; }
@@ -135,6 +173,7 @@ else
     private List<ActualsInput> actuals = [];
     private List<TripReport> reports = [];
     private List<decimal?> tips = [];
+    private List<PromisedInput> promised = [];
     private Guid? closedShift;
     private string? error;
 
@@ -162,6 +201,7 @@ else
         actuals = trips.Select(_ => new ActualsInput()).ToList();
         reports = trips.Select(t => Trips.Report(t.Id)).ToList();
         tips = trips.Select(_ => (decimal?)null).ToList();
+        promised = trips.Select(_ => new PromisedInput()).ToList();
     }
 
     private DateTimeOffset Local(DateTime time) => new(time, Clock.LocalTimeZone.GetUtcOffset(time));
@@ -223,6 +263,14 @@ else
             new(input.Route.Value, Grade.Entered),
             new(input.Return.Value, Grade.Entered)));
         Attempt(ack => Trips.RecordActuals(trip, entered, ack));
+    }
+
+    // FR-6a: add the offer's tip after accept, or change it; the service decides when a reason is needed.
+    private void SetPromisedTip(int index)
+    {
+        if (promised[index].Amount is not { } amount) { error = "Enter the tip from the offer."; return; }
+        var (trip, reason) = (trips[index].Id, promised[index].Reason);
+        Attempt(ack => Trips.SetPromisedTip(trip, amount, reason, ack));
     }
 
     private void MarkAllTipsIn(int index)

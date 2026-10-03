@@ -31,6 +31,7 @@ public sealed partial class LedgerServices : IExportService
         manifest.Add(Table(zip, "ChargeSessions", db.ChargeSessions));
         manifest.Add(Table(zip, "Tips", db.Tips));
         manifest.Add(Table(zip, "TipsIn", db.TipsIn));
+        manifest.Add(Table(zip, "PromisedTips", db.PromisedTips));
         manifest.Add(Table(zip, "HomeRates", db.HomeRates));
         manifest.Add(Table(zip, "Drives", db.Drives));
         manifest.Add(Table(zip, "Expenses", db.Expenses));

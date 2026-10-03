@@ -1,8 +1,7 @@
 namespace GigLedger.Core;
 
 /// <summary>The settings in force (SDD 4.1). Stored as versions; the newest one applies.</summary>
-/// <param name="TrackTips">FR-6a: the screens ask for the promised tip and offer "all tips in".</param>
-public sealed record Settings(decimal AcceptThreshold, decimal DefaultMilesPerKwh, decimal DefaultPricePerKwh, bool TrackTips = false)
+public sealed record Settings(decimal AcceptThreshold, decimal DefaultMilesPerKwh, decimal DefaultPricePerKwh)
 {
     /// <summary>Confirmed 2026-09-25 (SDD section 11).</summary>
     public static Settings Initial { get; } = new(25.00m, 4.0m, 0.69m);
@@ -96,6 +95,11 @@ public interface ITripService
     IReadOnlyList<StoredTrip> OnShift(Guid shiftId);
     /// <summary>FR-6: a posted tip; a trip can have several, summed. Never added on top of pay.</summary>
     void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt, Acknowledgement? acknowledgement = null);
+    /// <summary>
+    /// FR-6a: adds the promised tip after accept, or changes it. A change needs a one-line reason (FR-25);
+    /// filling a blank does not.
+    /// </summary>
+    void SetPromisedTip(Guid tripId, decimal amount, string? reason = null, Acknowledgement? acknowledgement = null);
     /// <summary>FR-6a: the trip's tips are final, once 24 hours have passed since it ended.</summary>
     void MarkAllTipsIn(Guid tripId, DateTimeOffset at);
     /// <summary>FR-14, FR-16, FR-17, on the energy of the 30 days before the trip's shift (FR-9a).</summary>
