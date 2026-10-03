@@ -49,7 +49,7 @@ public static class LedgerApiRecord
 
         api.MapPost("/trips/{id:guid}/actuals/correct", (Guid id, CorrectActualsRequest request, ICorrectionService corrections) =>
         {
-            corrections.CorrectActuals(id, request.Actuals, request.Reason);
+            corrections.CorrectActuals(id, request.Actuals, request.Reason, request.Acknowledgement);
             return Results.NoContent();
         });
 

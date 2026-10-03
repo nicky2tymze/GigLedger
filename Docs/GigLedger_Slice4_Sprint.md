@@ -103,3 +103,13 @@ At close: what this slice did badly.
   first): the Items box started at 0; it now starts blank and is asked for, never taken as 0. Drops keeps
   its default of 1 (his). Also found: launched without a development environment, the app does not serve
   its scoped stylesheet, so the error bar shows permanently; a launch fault, not a code fault.
+- 2026-10-03: **Story 2 built, awaiting the live check and acceptance.** The Architect's answers: pay is
+  checked only on the offer; speed and trip length on actuals, tip on the tip, shift length at the end;
+  a charge is refused above the battery size plus 25%. His yes on two calls: 5 minutes of grace on a
+  future start; the report lists explained values only, for now. SRS 0.7 section 5.9 (FR-35 to FR-38),
+  SDD 0.8 section 6.10. 54 tests written first: 52 failed, the 2 that passed early were shown failing on
+  planted violations. Five existing tests broke on the new rules; each kept its purpose: two modelled the
+  very typos the checks now stop at entry (243 kWh for 24.3; 5 minutes for 55), so their typos became ones
+  the checks let through; the decimal-precision test records its large pay with an explanation; a tax
+  test's clock was earlier than its own shift; the export now includes Limits and EntryMarks. Suite 356
+  passed. Deferred: marks shown beside each record on screen.

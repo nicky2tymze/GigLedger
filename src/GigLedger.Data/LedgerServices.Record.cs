@@ -132,11 +132,12 @@ public sealed partial class LedgerServices
 
     // ---- Corrections to Slice 1 and 2 records (FR-25) ----
 
-    public void CorrectActuals(Guid tripId, GradedActuals corrected, string reason)
+    public void CorrectActuals(Guid tripId, GradedActuals corrected, string reason, Acknowledgement? acknowledgement = null)
     {
         FindTrip(tripId);
         var current = FindActuals(tripId) ?? throw new InvalidOperationException($"Trip {tripId} has no actuals to correct.");
         ToCorrect(db.TripActuals.AsNoTracking().Where(a => a.TripId == tripId), current.Id, reason);
+        CheckActuals(tripId, corrected, acknowledgement);
         db.TripActuals.Add(new TripActualsRow
         {
             RecordedAt = clock.GetUtcNow(),

@@ -11,6 +11,8 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
     public DbSet<DeclineRow> Declines => Set<DeclineRow>();
     public DbSet<TripActualsRow> TripActuals => Set<TripActualsRow>();
     public DbSet<SettingsRow> Settings => Set<SettingsRow>();
+    public DbSet<LimitsRow> Limits => Set<LimitsRow>();
+    public DbSet<EntryMarkRow> EntryMarks => Set<EntryMarkRow>();
     public DbSet<ChargeSessionRow> ChargeSessions => Set<ChargeSessionRow>();
     public DbSet<TipRow> Tips => Set<TipRow>();
     public DbSet<HomeRateRow> HomeRates => Set<HomeRateRow>();
@@ -33,6 +35,9 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         conventions.Properties<Core.TaxForm>().HaveConversion<string>();
         conventions.Properties<Core.PayoutType>().HaveConversion<string>();
         conventions.Properties<Core.Verdict>().HaveConversion<string>();
+        conventions.Properties<Core.MarkedRecord>().HaveConversion<string>();
+        conventions.Properties<Core.EntryLimit>().HaveConversion<string>();
+        conventions.Properties<Core.MarkLevel>().HaveConversion<string>();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -40,6 +45,7 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         model.Entity<ShiftCloseRow>().HasIndex(r => r.ShiftId);
         model.Entity<TripRow>().HasIndex(r => r.ShiftId);
         model.Entity<DeclineRow>().HasIndex(r => r.ShiftId);
+        model.Entity<EntryMarkRow>().HasIndex(r => r.RecordId);
         model.Entity<TripActualsRow>().HasIndex(r => r.TripId);
         model.Entity<TipRow>().HasIndex(r => r.TripId);
         model.Entity<DriveRow>().HasIndex(r => r.ShiftId);
@@ -54,6 +60,20 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
             PerKwh = Core.HomeRate.Placeholder.PerKwh,
             EffectiveFrom = Core.HomeRate.Placeholder.EffectiveFrom,
             IsPlaceholder = true,
+        });
+
+        // SRS 0.7 FR-36, FR-37: the starting limits, stored as the first version.
+        var limits = Core.Limits.Initial;
+        model.Entity<LimitsRow>().HasData(new LimitsRow
+        {
+            Id = new Guid("5e771495-0000-4000-8000-000000000003"),
+            RecordedAt = new DateTimeOffset(2026, 10, 3, 0, 0, 0, TimeSpan.FromHours(-5)),
+            PayConfirm = limits.Pay.Confirm, PayDocument = limits.Pay.Document,
+            SpeedConfirm = limits.Speed.Confirm, SpeedDocument = limits.Speed.Document,
+            TripLengthConfirm = limits.TripLength.Confirm, TripLengthDocument = limits.TripLength.Document,
+            TipConfirm = limits.Tip.Confirm, TipDocument = limits.Tip.Document,
+            ShiftLengthConfirm = limits.ShiftLength.Confirm, ShiftLengthDocument = limits.ShiftLength.Document,
+            BatteryKwh = limits.BatteryKwh,
         });
 
         // The confirmed starting settings (SDD section 11), stored as the first version.

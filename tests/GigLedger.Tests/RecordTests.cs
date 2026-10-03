@@ -167,8 +167,9 @@ public sealed class RecordTests : IDisposable
     {
         var shift = Shifts.Start("Spark", Now, new(17_000m, Grade.Measured));
         var trip = _ledger.Accept(shift, new Offer(new(34.89m, Grade.Stated), new(6.6m, Grade.Stated), 2, 32, new(58, Grade.Stated), Now), Now);
-        Trips.RecordActuals(trip, new(new(5, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)));
-        Corrections.CorrectActuals(trip, new(new(55, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)), "dropped a digit: 55 minutes, not 5");
+        // A misread entry the entry checks let through (48 mph): 5 minutes would now be stopped at entry (FR-35).
+        Trips.RecordActuals(trip, new(new(15, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)));
+        Corrections.CorrectActuals(trip, new(new(55, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)), "misread: 55 minutes, not 15");
 
         Assert.Equal(55, Trips.Get(trip).Actuals!.ElapsedMinutes.Value);
         Assert.Equal(2, Corrections.ActualsHistory(trip).Count);
@@ -179,10 +180,11 @@ public sealed class RecordTests : IDisposable
     [Fact]
     public void FR25_ACorrectedChargeReplacesTheOriginalInTheWindow()
     {
-        var session = new ChargeSession(Now.AddDays(-1), new(17_935m, Grade.Measured), new(243m, Grade.Measured), new(16.77m, Grade.Measured),
+        // A transposed figure the battery check lets through; 243 kWh would now be refused at entry (FR-37).
+        var session = new ChargeSession(Now.AddDays(-1), new(17_935m, Grade.Measured), new(34.2m, Grade.Measured), new(16.77m, Grade.Measured),
             36, 71, "Blink", ChargeType.DcFast, Purpose.Work);
         var original = Charges.Record(session);
-        var corrected = Corrections.CorrectCharge(original, session with { Kwh = new(24.3m, Grade.Measured) }, "kWh read as 243, receipt says 24.3");
+        var corrected = Corrections.CorrectCharge(original, session with { Kwh = new(24.3m, Grade.Measured) }, "kWh read as 34.2, receipt says 24.3");
 
         var stored = Assert.Single(Charges.Between(Now.AddDays(-2), Now));
         Assert.Equal(corrected, stored.Id);

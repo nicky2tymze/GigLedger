@@ -254,7 +254,8 @@ public sealed class PersistenceTests : IDisposable
     {
         // SQLite has no decimal type; EF stores text. These must come back to the last digit.
         var offer = Run4Offer() with { Pay = new(12_345.6789m, Grade.Stated), StatedMiles = new(0.1725m, Grade.Stated) };
-        var id = _ledger.Accept(StartedShift(), offer, T0);
+        // Past the pay limit (FR-35), so it goes in explained; the point here is the digits.
+        var id = _ledger.Accept(StartedShift(), offer, T0, new Acknowledgement(true, "precision check"));
         using var fresh = Reopen();
         var row = fresh.Trips.Single(t => t.Id == id);
         Assert.Equal(12_345.6789m, row.Pay);

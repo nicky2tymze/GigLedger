@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.7 · 2026-10-03 · DRAFT. Designs against SRS 0.6. 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.8 · 2026-10-03 · DRAFT. Designs against SRS 0.7. 0.8 adds section 6.10, entry checks (Slice 4, story 2). 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -294,6 +294,49 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   list as checkboxes in display order and a note field, and **Confirm decline** stores it. With no
   shift open, Accept reads **Accept and start a shift**; there is no Decline. Reports: a declines
   table for the range, by reason, with the clears / does-not-clear counts.
+
+### 6.10 Entry checks (Slice 4, story 2: FR-35 to FR-38)
+
+- **The limits (FR-36).** `Limits` holds a confirm and a document figure for each of `Pay`, `Speed`,
+  `TripLength`, `Tip`, `ShiftLength`, and the battery size in kWh. Stored as versions in a `Limits`
+  table, seeded with the SRS values, read like `Settings` (the version nothing supersedes). One
+  vehicle in 0.x, so the battery size lives here; it moves to a Vehicle record when a second exists.
+- **The check (FR-35).** `EntryChecks.Check(limit, value, limits)` returns nothing at or below the
+  confirm figure, otherwise a `LimitCheck` (the limit, the value, the figure it passed, and whether it
+  needs a confirm or an explanation). Above means strictly above: $80.00 is within. Speed is
+  (route + return miles) / (minutes / 60); shift length is the end time minus the start time in
+  hours. Both are computed in Core.
+- **The acknowledgement.** Every storing operation that is checked takes an optional
+  `Acknowledgement(confirmed, explanation)`. `EntryChecks.Resolve(checks, acknowledgement)`: no checks,
+  nothing needed; any check needing a confirm needs `confirmed`; any needing an explanation needs
+  `confirmed` and a non-blank explanation. Short of that it throws `NeedsAcknowledgementException`,
+  carrying the checks, **before anything is stored**. The screens catch it and show the confirm step,
+  then call again with the acknowledgement.
+- **Where (FR-36).** `Accept` and `Decline` check pay. `RecordActuals` and `CorrectActuals` check speed
+  and trip length together (one acknowledgement covers both). `RecordTip` checks the tip. `End` checks
+  the shift length. A correction is checked like the entry it corrects, or a correction would be the
+  way around the check.
+- **The marks.** Each passed check that was acknowledged is stored as an `EntryFlags` row (append-only,
+  FR-25 triggers in their own migration): the record kind and id, the limit, the value, the figure
+  passed, the level (`Confirmed` or `Explained`), the explanation, and the time. Stored in the same
+  `SaveChanges` as the record, so a record and its mark cannot come apart.
+- **Refusals (FR-37).** Thrown as `ArgumentException` with the sentence, before any check or store:
+  negative pay (accept, decline), negative tip, negative minutes or miles in actuals (and zero
+  minutes, since speed divides by them and a trip takes time); a shift start more than 5 minutes after
+  the clock; a shift end more than 24 hours after its start; a charge whose kWh is over the battery
+  size times 1.25 (`Record`, `CorrectCharge`, and the charge import, where it stops the file as FR-22
+  says for any row FR-5 refuses).
+- **The report (FR-38).** `IEntryCheckService.ExplainedValues(from, to)`: every `Explained` mark whose
+  local date is in the range, oldest first. `IEntryCheckService` also reads and sets the limits and
+  lists the marks on one record.
+- **Interfaces.** Requests that store a checked value gain an optional `acknowledgement`. A missing
+  or short one is **409 Conflict** with the checks in the body, so an agent client can ask the driver
+  and retry. `GET /api/limits`, `POST /api/limits`, `GET /api/explained?from=&to=`, `GET /api/marks/{id}` (the marks on one record).
+- **Screens.** Offer, Shift (actuals, tip, end): on `NeedsAcknowledgementException`, a panel lists each
+  check in words ("Pay $95.00 is above $80.00"), with **Yes, it is right** for a confirm, or an
+  explanation box and **Record with this explanation** for a document level. The held offer of FR-2b
+  carries its acknowledgement to the shift page. Reports: an explained-values table for the range.
+  Marks are not yet shown beside each record on screen (the API lists them); deferred.
 
 ### 6.4 Guards
 

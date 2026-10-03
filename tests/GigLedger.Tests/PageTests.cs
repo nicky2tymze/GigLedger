@@ -37,6 +37,7 @@ public sealed class PageTests : TestContext
         var db = LedgerDatabase.Open(_connection);
         _ledger = new LedgerServices(db, _clock);
         Services.AddSingleton<TimeProvider>(_clock);
+        Services.AddSingleton<IEntryCheckService>(_ledger);
         Services.AddSingleton(new HeldOffer());
         Services.AddSingleton<ISettingsService>(_ledger);
         Services.AddSingleton<IOfferService>(_ledger);

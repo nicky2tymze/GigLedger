@@ -8,7 +8,7 @@ namespace GigLedger.Data;
 /// (FR-34). They move data in and out; every calculation is delegated to Core.
 /// </summary>
 public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
-    : ISettingsService, IOfferService, ITripService, IShiftService, IChargeService, IPayoutService
+    : ISettingsService, IOfferService, ITripService, IShiftService, IChargeService, IPayoutService, IEntryCheckService
 {
     // ---- Home rate (FR-5) ----
 
@@ -47,6 +47,20 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             .Select(r => r.ReceiptNumber!)
             .ToHashSet();
 
+        // FR-37: a charge the battery could not take stops the file, like any row FR-5 refuses.
+        var battery = GetLimits().BatteryKwh;
+        for (var i = 0; i < sessions.Count; i++)
+        {
+            try
+            {
+                EntryChecks.RefuseOverBattery(sessions[i].Kwh.Value, battery);
+            }
+            catch (ArgumentOutOfRangeException e)
+            {
+                throw new ArgumentException($"line {i + 2}: {e.Message.Split(" (Parameter")[0]}");
+            }
+        }
+
         var fresh = sessions.Where(s => stored.Add(s.ReceiptNumber!)).ToList();
         using var transaction = db.Database.BeginTransaction();
         db.ChargeSessions.AddRange(fresh.Select(s => ToRow(s)));
@@ -58,6 +72,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
     private Guid AddCharge(ChargeSession session, Guid? supersedes = null, string? reason = null)
     {
         EnergyCalculations.Validate(session);
+        EntryChecks.RefuseOverBattery(session.Kwh.Value, GetLimits().BatteryKwh);
         var row = ToRow(session, supersedes, reason);
         db.ChargeSessions.Add(row);
         db.SaveChanges();
@@ -110,13 +125,14 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     // ---- Tips (FR-6, FR-17) and trip reports (FR-14, FR-16) ----
 
-    public void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt)
+    public void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt, Acknowledgement? acknowledgement = null)
     {
         FindTrip(tripId);
         if (amount < 0)
             throw new ArgumentOutOfRangeException(nameof(amount), amount, "A tip cannot be negative.");
         if (FindTip(tripId) is not null)
             throw new InvalidOperationException($"Trip {tripId} already has its tip; a tip is the whole trip's tip.");
+        CheckAndMark(MarkedRecord.Tip, tripId, acknowledgement, (EntryLimit.Tip, amount));
         db.Tips.Add(new TipRow { RecordedAt = clock.GetUtcNow(), TripId = tripId, Amount = amount, AmountGrade = Grade.Stated, PostedAt = postedAt });
         db.SaveChanges();
     }
@@ -166,11 +182,12 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         return new OfferEvaluation(forecast, Calculations.AcceptVerdict(forecast, settings.AcceptThreshold), settings.AcceptThreshold);
     }
 
-    public Guid Accept(Guid shiftId, Offer offer, DateTimeOffset acceptedAt)
+    public Guid Accept(Guid shiftId, Offer offer, DateTimeOffset acceptedAt, Acknowledgement? acknowledgement = null)
     {
         FindShift(shiftId);
         if (FindClose(shiftId) is not null)
             throw new InvalidOperationException($"Shift {shiftId} is closed.");
+        EntryChecks.RefuseNegative(offer.Pay.Value, "Pay");
 
         var row = new TripRow
         {
@@ -185,6 +202,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             ReturnMilesOverride = offer.ReturnMilesOverride,
             AcceptedAt = acceptedAt,
         };
+        CheckAndMark(MarkedRecord.Trip, row.Id, acknowledgement, (EntryLimit.Pay, offer.Pay.Value));
         db.Trips.Add(row);
         db.SaveChanges();
         return row.Id;
@@ -192,12 +210,13 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     // ---- Declines (FR-2a, FR-21a) ----
 
-    public Guid Decline(Guid shiftId, Offer offer, IReadOnlyList<DeclineReason> reasons, string? note, DateTimeOffset declinedAt)
+    public Guid Decline(Guid shiftId, Offer offer, IReadOnlyList<DeclineReason> reasons, string? note, DateTimeOffset declinedAt, Acknowledgement? acknowledgement = null)
     {
         FindShift(shiftId);
         if (FindClose(shiftId) is not null)
             throw new InvalidOperationException($"Shift {shiftId} is closed; a decline needs an open shift.");
         var (ordered, trimmed) = DeclineRules.Validate(reasons, note);
+        EntryChecks.RefuseNegative(offer.Pay.Value, "Pay");
 
         // The forecast and verdict at this moment (FR-2a), kept as they were.
         var evaluation = Evaluate(offer);
@@ -220,6 +239,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             Reasons = string.Join(",", ordered),
             Note = trimmed,
         };
+        CheckAndMark(MarkedRecord.Decline, row.Id, acknowledgement, (EntryLimit.Pay, offer.Pay.Value));
         db.Declines.Add(row);
         db.SaveChanges();
         return row.Id;
@@ -267,11 +287,12 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
 
     // ---- Trips ----
 
-    public void RecordActuals(Guid tripId, GradedActuals actuals)
+    public void RecordActuals(Guid tripId, GradedActuals actuals, Acknowledgement? acknowledgement = null)
     {
         FindTrip(tripId);
         if (FindActuals(tripId) is not null)
             throw new InvalidOperationException($"Trip {tripId} already has actuals; a change is a correction.");
+        CheckActuals(tripId, actuals, acknowledgement);
 
         db.TripActuals.Add(new TripActualsRow
         {
@@ -322,6 +343,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
     {
         if (Open() is { } open)
             throw new InvalidOperationException($"Shift {open.Id} is still open; end it before starting another.");
+        EntryChecks.RefuseFutureStart(startedAt, clock.GetUtcNow());
         var row = new ShiftRow
         {
             RecordedAt = clock.GetUtcNow(),
@@ -335,7 +357,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         return row.Id;
     }
 
-    public void End(Guid shiftId, DateTimeOffset endedAt, Graded<decimal> endOdometer)
+    public void End(Guid shiftId, DateTimeOffset endedAt, Graded<decimal> endOdometer, Acknowledgement? acknowledgement = null)
     {
         var shift = FindShift(shiftId);
         if (FindClose(shiftId) is not null)
@@ -344,6 +366,8 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             throw new ArgumentOutOfRangeException(nameof(endedAt), endedAt, "The shift must end after it starts.");
         if (endOdometer.Value < shift.StartOdometer)
             throw new ArgumentOutOfRangeException(nameof(endOdometer), endOdometer.Value, "End odometer is below the start reading.");
+        EntryChecks.RefuseOverlongShift(shift.StartedAt, endedAt);
+        CheckAndMark(MarkedRecord.ShiftClose, shiftId, acknowledgement, (EntryLimit.ShiftLength, EntryChecks.ShiftHours(shift.StartedAt, endedAt)));
 
         db.ShiftCloses.Add(new ShiftCloseRow
         {
@@ -397,6 +421,15 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         var minutes = (int)Math.Round((close.EndedAt - shift.StartedAt).TotalMinutes);
         var span = new ShiftSpan(minutes, shift.StartOdometer, close.EndOdometer);
         return Calculations.SummarizeShift(span, trips, EnergyBefore(shift.StartedAt));
+    }
+
+    /// <summary>FR-37 refusals, then speed and trip length under one acknowledgement (SDD 6.10).</summary>
+    private void CheckActuals(Guid tripId, GradedActuals actuals, Acknowledgement? acknowledgement)
+    {
+        EntryChecks.RefuseImpossibleActuals(actuals.Values);
+        CheckAndMark(MarkedRecord.TripActuals, tripId, acknowledgement,
+            (EntryLimit.Speed, EntryChecks.SpeedMph(actuals.Values)),
+            (EntryLimit.TripLength, actuals.RouteMiles.Value + actuals.ReturnMiles.Value));
     }
 
     // ---- Lookups ----

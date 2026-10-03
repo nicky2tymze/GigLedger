@@ -89,7 +89,7 @@ public interface IExpenseService
 /// <summary>Corrections to records captured in Slices 1 and 2 (FR-25).</summary>
 public interface ICorrectionService
 {
-    void CorrectActuals(Guid tripId, GradedActuals corrected, string reason);
+    void CorrectActuals(Guid tripId, GradedActuals corrected, string reason, Acknowledgement? acknowledgement = null);
     IReadOnlyList<Version<GradedActuals>> ActualsHistory(Guid tripId);
     Guid CorrectCharge(Guid chargeId, ChargeSession corrected, string reason);
     IReadOnlyList<Version<ChargeSession>> ChargeHistory(Guid chargeId);

@@ -74,8 +74,8 @@ public sealed class ExportTests : TestContext
     {
         var shift = ((IShiftService)_ledger).Start("Spark", Now, new(17_000m, Grade.Measured));
         var trip = _ledger.Accept(shift, new Offer(new(34.89m, Grade.Stated), new(6.6m, Grade.Stated), 2, 32, new(58, Grade.Stated), Now), Now);
-        ((ITripService)_ledger).RecordActuals(trip, new(new(5, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)));
-        ((ICorrectionService)_ledger).CorrectActuals(trip, new(new(55, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)), "55 minutes, not 5");
+        ((ITripService)_ledger).RecordActuals(trip, new(new(15, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)));
+        ((ICorrectionService)_ledger).CorrectActuals(trip, new(new(55, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)), "55 minutes, not 15");
         var expense = ((IExpenseService)_ledger).Record(new Expense(new(2026, 9, 25), ExpenseCategory.Supplies, new(18.47m, Grade.Measured), "Binders"));
         var receipt = ((IAttachmentService)_ledger).Attach(AttachedTo.Expense, expense, "walmart.pdf", "application/pdf", ReceiptPdf);
 
@@ -85,7 +85,7 @@ public sealed class ExportTests : TestContext
 
         var actuals = Lines(zip, "TripActuals.csv");
         Assert.Equal(3, actuals.Length);                         // header, the original, the correction
-        Assert.Contains(actuals, l => l.EndsWith(",\"55 minutes, not 5\"")); // the reason has a comma: it must be quoted
+        Assert.Contains(actuals, l => l.EndsWith(",\"55 minutes, not 15\"")); // the reason has a comma: it must be quoted
 
         var trips = Lines(zip, "Trips.csv");
         Assert.Contains(trips, l => l.Contains(",34.89,"));        // invariant decimal

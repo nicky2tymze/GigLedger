@@ -4,6 +4,7 @@
 @inject TimeProvider Clock
 @inject NavigationManager Nav
 @inject HeldOffer Held
+@inject IEntryCheckService Checks
 
 <PageTitle>Offer · GigLedger</PageTitle>
 
@@ -23,6 +24,11 @@
 @if (error is not null)
 {
     <p class="error">@error</p>
+}
+
+@if (pending is not null)
+{
+    <AcknowledgePanel Pending="pending" OnAcknowledge="Acknowledge" OnCancel="() => pending = null" />
 }
 
 @if (evaluation is not null)
@@ -87,6 +93,10 @@
     private readonly HashSet<DeclineReason> chosen = [];
     private string? declineNote;
 
+    // SDD 6.10: a value past a limit waits here for the driver's confirm, then the same action runs again.
+    private NeedsAcknowledgementException? pending;
+    private Action<Acknowledgement?>? retry;
+
     protected override void OnInitialized() => open = Shifts.Open();
 
     private void Evaluate()
@@ -122,40 +132,58 @@
         else chosen.Remove(reason);
     }
 
-    private void Decline()
+    /// <summary>Runs a storing action; past a limit, keeps it to run again once acknowledged.</summary>
+    private void Attempt(Action<Acknowledgement?> action, Acknowledgement? acknowledgement = null)
     {
-        // Only the offer on screen, as last evaluated, can be declined.
-        if (open is null || offer is null || evaluation is null) return;
+        error = null;
         try
         {
-            Offers.Decline(open.Id, offer, chosen.ToList(), declineNote, Clock.GetLocalNow());
+            action(acknowledgement);
+            pending = null;
             Nav.NavigateTo("/");
+        }
+        catch (NeedsAcknowledgementException e)
+        {
+            pending = e;
+            retry = action;
         }
         catch (Exception e) when (Refusal.IsRefusal(e))
         {
+            pending = null;
             error = Refusal.Reason(e);
         }
     }
 
-    // FR-2b: hold the offer and go start a shift; starting it completes the accept.
+    private void Acknowledge(Acknowledgement acknowledgement)
+    {
+        if (retry is { } action) Attempt(action, acknowledgement);
+    }
+
+    private void Decline()
+    {
+        // Only the offer on screen, as last evaluated, can be declined.
+        if (open is null || offer is null || evaluation is null) return;
+        var (shift, declined, reasons, note, at) = (open.Id, offer, chosen.ToList(), declineNote, Clock.GetLocalNow());
+        Attempt(ack => Offers.Decline(shift, declined, reasons, note, at, ack));
+    }
+
+    // FR-2b: hold the offer and go start a shift; starting it completes the accept. The pay check
+    // runs here, so the confirm happens while the offer is on screen.
     private void AcceptAndStartShift()
     {
         if (offer is null) return;
-        Held.Hold(offer, Clock.GetLocalNow());
-        Nav.NavigateTo("/");
+        var (held, at) = (offer, Clock.GetLocalNow());
+        Attempt(ack =>
+        {
+            EntryChecks.Resolve(EntryChecks.CheckAll(Checks.GetLimits(), (EntryLimit.Pay, held.Pay.Value)), ack);
+            Held.Hold(held, at, ack);
+        });
     }
 
     private void Accept()
     {
         if (open is null || offer is null) return;
-        try
-        {
-            Offers.Accept(open.Id, offer, Clock.GetLocalNow());
-            Nav.NavigateTo("/");
-        }
-        catch (Exception e) when (Refusal.IsRefusal(e))
-        {
-            error = Refusal.Reason(e);
-        }
+        var (shift, accepted, at) = (open.Id, offer, Clock.GetLocalNow());
+        Attempt(ack => Offers.Accept(shift, accepted, at, ack));
     }
 }

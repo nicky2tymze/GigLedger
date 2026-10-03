@@ -1,6 +1,7 @@
 @page "/reports"
 @inject IReportService Reporting
 @inject IOfferService Offers
+@inject IEntryCheckService Checks
 @inject TimeProvider Clock
 
 <PageTitle>Reports · GigLedger</PageTitle>
@@ -64,12 +65,40 @@ else if (report is not null)
     <p class="hint">An offer declined for two reasons counts under both.</p>
 }
 
+@if (explained is not null)
+{
+    <h2>Explained values</h2>
+    @if (explained.Count == 0)
+    {
+        <p class="hint">No values past a document limit in this period.</p>
+    }
+    else
+    {
+        <table id="explained-values">
+            <tr><th>When</th><th>Record</th><th>Limit</th><th>Value</th><th>Above</th><th>Explanation</th></tr>
+            @foreach (var mark in explained)
+            {
+                <tr class="explained">
+                    <td>@Display.Time(mark.At)</td>
+                    <td>@mark.Record</td>
+                    <td>@EntryChecks.Name(mark.Limit)</td>
+                    <td>@EntryChecks.Format(mark.Limit, mark.Value)</td>
+                    <td>@EntryChecks.Format(mark.Limit, mark.Passed)</td>
+                    <td>@mark.Explanation</td>
+                </tr>
+            }
+        </table>
+    }
+    <p class="hint">Review these before filing (FR-38).</p>
+}
+
 <p><a id="export-csv" href="@CsvUrl()">Export to CSV</a></p>
 
 @code {
     private DateOnly from, to;
     private PeriodReport? report;
     private DeclineReport? declines;
+    private IReadOnlyList<EntryMark>? explained;
     private string? error;
 
     // Built in @code: see the note on TC-34 about strings inside Razor attributes.
@@ -98,11 +127,13 @@ else if (report is not null)
         {
             report = Reporting.Report(from, to);
             declines = Offers.ReportDeclines(from, to);
+            explained = Checks.ExplainedValues(from, to);
         }
         catch (Exception e) when (Refusal.IsRefusal(e))
         {
             report = null;
             declines = null;
+            explained = null;
             error = Refusal.Reason(e);
         }
     }

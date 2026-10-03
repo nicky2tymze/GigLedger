@@ -25,6 +25,7 @@ public sealed class EnergyPageTests : TestContext
         _connection.Open();
         _ledger = new LedgerServices(LedgerDatabase.Open(_connection), _clock);
         Services.AddSingleton<TimeProvider>(_clock);
+        Services.AddSingleton<IEntryCheckService>(_ledger);
         Services.AddSingleton(new HeldOffer());
         Services.AddSingleton<ISettingsService>(_ledger);
         Services.AddSingleton<IOfferService>(_ledger);

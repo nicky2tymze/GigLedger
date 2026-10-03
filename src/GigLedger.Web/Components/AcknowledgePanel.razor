@@ -1,0 +1,24 @@
+@* The confirm step for values past an entry limit (SDD 6.10). A confirm level asks "is it right?";
+   a document level asks for an explanation, and records nothing without one. *@
+
+<section id="ack-panel" class="error">
+    <p>@EntryChecks.Describe(Pending.Checks)</p>
+    @if (Pending.NeedsExplanation)
+    {
+        <label>Explanation <textarea id="ack-explanation" @bind="explanation"></textarea></label>
+        <button id="ack-record" @onclick="() => OnAcknowledge.InvokeAsync(new Acknowledgement(true, explanation))">Record with this explanation</button>
+    }
+    else
+    {
+        <button id="ack-confirm" @onclick="() => OnAcknowledge.InvokeAsync(new Acknowledgement(true))">Yes, it is right</button>
+    }
+    <button id="ack-cancel" @onclick="OnCancel">Go back and fix it</button>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public NeedsAcknowledgementException Pending { get; set; } = default!;
+    [Parameter] public EventCallback<Acknowledgement> OnAcknowledge { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string? explanation;
+}

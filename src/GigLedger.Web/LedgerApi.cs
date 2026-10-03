@@ -23,7 +23,7 @@ public static class LedgerApi
 
         api.MapPost("/shifts/{id:guid}/end", (Guid id, EndShiftRequest request, IShiftService shifts) =>
         {
-            shifts.End(id, request.EndedAt, request.EndOdometer);
+            shifts.End(id, request.EndedAt, request.EndOdometer, request.Acknowledgement);
             return Results.NoContent();
         });
 
@@ -38,13 +38,13 @@ public static class LedgerApi
 
         api.MapPost("/shifts/{id:guid}/trips", (Guid id, AcceptOfferRequest request, IOfferService offers) =>
         {
-            var trip = offers.Accept(id, request.Offer, request.AcceptedAt);
+            var trip = offers.Accept(id, request.Offer, request.AcceptedAt, request.Acknowledgement);
             return Results.Created($"/api/trips/{trip}", new Created(trip));
         });
 
         api.MapPost("/shifts/{id:guid}/declines", (Guid id, DeclineOfferRequest request, IOfferService offers) =>
         {
-            var decline = offers.Decline(id, request.Offer, request.Reasons, request.Note, request.DeclinedAt);
+            var decline = offers.Decline(id, request.Offer, request.Reasons, request.Note, request.DeclinedAt, request.Acknowledgement);
             return Results.Created($"/api/shifts/{id}/declines", new Created(decline));
         });
 
@@ -54,9 +54,9 @@ public static class LedgerApi
         api.MapGet("/declines", (DateOnly from, DateOnly to, IOfferService offers) =>
             Results.Ok(offers.ReportDeclines(from, to)));
 
-        api.MapPost("/trips/{id:guid}/actuals", (Guid id, GradedActuals actuals, ITripService trips) =>
+        api.MapPost("/trips/{id:guid}/actuals", (Guid id, ActualsRequest request, ITripService trips) =>
         {
-            trips.RecordActuals(id, actuals);
+            trips.RecordActuals(id, request.Actuals, request.Acknowledgement);
             return Results.NoContent();
         });
 
@@ -65,7 +65,7 @@ public static class LedgerApi
 
         api.MapPost("/trips/{id:guid}/tip", (Guid id, TipRequest request, ITripService trips) =>
         {
-            trips.RecordTip(id, request.Amount, request.PostedAt);
+            trips.RecordTip(id, request.Amount, request.PostedAt, request.Acknowledgement);
             return Results.NoContent();
         });
 
@@ -138,6 +138,19 @@ public static class LedgerApi
             return Results.File(zip.ToArray(), "application/zip", $"gigledger-export-{clock.GetLocalNow():yyyy-MM-dd}.zip");
         });
 
+        api.MapGet("/limits", (IEntryCheckService checks) => Results.Ok(checks.GetLimits()));
+
+        api.MapPost("/limits", (Limits limits, IEntryCheckService checks) =>
+        {
+            checks.SetLimits(limits);
+            return Results.NoContent();
+        });
+
+        api.MapGet("/explained", (DateOnly from, DateOnly to, IEntryCheckService checks) =>
+            Results.Ok(checks.ExplainedValues(from, to)));
+
+        api.MapGet("/marks/{id:guid}", (Guid id, IEntryCheckService checks) => Results.Ok(checks.MarksOn(id)));
+
         api.MapGet("/reports", (DateOnly from, DateOnly to, IReportService reports) =>
             Results.Ok(reports.Report(from, to)));
 
@@ -148,7 +161,8 @@ public static class LedgerApi
     /// <summary>
     /// A refusal from the services becomes a status code with the reason in the body:
     /// an unknown id is 404, bad input (any ArgumentException) is 400, and a request that conflicts with what is
-    /// already stored (a second close, a summary of an open shift) is 409.
+    /// already stored (a second close, a summary of an open shift) is 409. A value past an entry limit with
+    /// no acknowledgement is also 409, with the checks, so the client can ask the driver and retry (SDD 6.10).
     /// </summary>
     private static async ValueTask<object?> RefusalsAsStatusCodes(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
@@ -159,6 +173,11 @@ public static class LedgerApi
         catch (NotFoundException e)
         {
             return Results.Problem(e.Message, statusCode: StatusCodes.Status404NotFound);
+        }
+        catch (NeedsAcknowledgementException e)
+        {
+            return Results.Problem(e.Message, statusCode: StatusCodes.Status409Conflict,
+                extensions: new Dictionary<string, object?> { ["checks"] = e.Checks, ["needsExplanation"] = e.NeedsExplanation });
         }
         catch (ArgumentException e)
         {

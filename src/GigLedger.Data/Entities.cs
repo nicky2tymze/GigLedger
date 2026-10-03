@@ -85,6 +85,35 @@ public sealed class TripActualsRow : LedgerRecord
     public Grade ReturnMilesGrade { get; set; }
 }
 
+/// <summary>The entry limits in force (FR-36), stored as versions like the settings.</summary>
+public sealed class LimitsRow : LedgerRecord
+{
+    public decimal PayConfirm { get; set; }
+    public decimal PayDocument { get; set; }
+    public decimal SpeedConfirm { get; set; }
+    public decimal SpeedDocument { get; set; }
+    public decimal TripLengthConfirm { get; set; }
+    public decimal TripLengthDocument { get; set; }
+    public decimal TipConfirm { get; set; }
+    public decimal TipDocument { get; set; }
+    public decimal ShiftLengthConfirm { get; set; }
+    public decimal ShiftLengthDocument { get; set; }
+    public decimal BatteryKwh { get; set; }
+}
+
+/// <summary>A value past a limit that the driver confirmed or explained (FR-35, SDD 6.10).</summary>
+public sealed class EntryMarkRow : LedgerRecord
+{
+    public MarkedRecord Record { get; set; }
+    public Guid RecordId { get; set; }
+    public EntryLimit Limit { get; set; }
+    public decimal Value { get; set; }
+    public decimal Passed { get; set; }
+    public MarkLevel Level { get; set; }
+    public string? Explanation { get; set; }
+    public DateTimeOffset At { get; set; }
+}
+
 public sealed class SettingsRow : LedgerRecord
 {
     public decimal AcceptThreshold { get; set; }

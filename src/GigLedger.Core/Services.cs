@@ -64,12 +64,12 @@ public interface IOfferService
     /// <summary>Forecast and verdict. Stores nothing (FR-2).</summary>
     OfferEvaluation Evaluate(Offer offer);
     /// <summary>Stores the offer as a trip on the shift, with the accept time (FR-1, FR-2).</summary>
-    Guid Accept(Guid shiftId, Offer offer, DateTimeOffset acceptedAt);
+    Guid Accept(Guid shiftId, Offer offer, DateTimeOffset acceptedAt, Acknowledgement? acknowledgement = null);
     /// <summary>
     /// FR-2a: stores the offer as declined, with the forecast and verdict at that moment, the
     /// reasons, and the note. The shift must be open.
     /// </summary>
-    Guid Decline(Guid shiftId, Offer offer, IReadOnlyList<DeclineReason> reasons, string? note, DateTimeOffset declinedAt);
+    Guid Decline(Guid shiftId, Offer offer, IReadOnlyList<DeclineReason> reasons, string? note, DateTimeOffset declinedAt, Acknowledgement? acknowledgement = null);
     /// <summary>Every decline on the shift, in the order declined.</summary>
     IReadOnlyList<StoredDecline> DeclinesOnShift(Guid shiftId);
     /// <summary>FR-21a: declines whose local date is from..to, inclusive.</summary>
@@ -79,12 +79,12 @@ public interface IOfferService
 public interface ITripService
 {
     /// <summary>Written once, after the trip (FR-3, SDD 5.3).</summary>
-    void RecordActuals(Guid tripId, GradedActuals actuals);
+    void RecordActuals(Guid tripId, GradedActuals actuals, Acknowledgement? acknowledgement = null);
     StoredTrip Get(Guid tripId);
     /// <summary>Every trip accepted on the shift, in the order accepted.</summary>
     IReadOnlyList<StoredTrip> OnShift(Guid shiftId);
     /// <summary>FR-6: one tip per trip, the whole trip's tip.</summary>
-    void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt);
+    void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt, Acknowledgement? acknowledgement = null);
     /// <summary>FR-14, FR-16, FR-17, on the energy of the 30 days before the trip's shift (FR-9a).</summary>
     TripReport Report(Guid tripId);
 }
@@ -93,7 +93,7 @@ public interface IShiftService
 {
     Guid Start(string platform, DateTimeOffset startedAt, Graded<decimal> startOdometer);
     /// <summary>Written once, when the shift ends (FR-4, SDD 5.3).</summary>
-    void End(Guid shiftId, DateTimeOffset endedAt, Graded<decimal> endOdometer);
+    void End(Guid shiftId, DateTimeOffset endedAt, Graded<decimal> endOdometer, Acknowledgement? acknowledgement = null);
     StoredShift Get(Guid shiftId);
     /// <summary>The shift that has started and not ended, if there is one.</summary>
     StoredShift? Open();

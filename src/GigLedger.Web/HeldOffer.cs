@@ -14,15 +14,20 @@ public sealed class HeldOffer
     /// <summary>The moment accept was pressed: the trip's accept time and the shift's default start.</summary>
     public DateTimeOffset AcceptPressedAt { get; private set; }
 
-    public void Hold(Offer offer, DateTimeOffset acceptPressedAt)
+    /// <summary>The driver's answer to the offer's entry checks, carried to the accept (SDD 6.10).</summary>
+    public Acknowledgement? Acknowledgement { get; private set; }
+
+    public void Hold(Offer offer, DateTimeOffset acceptPressedAt, Acknowledgement? acknowledgement = null)
     {
         Offer = offer;
         AcceptPressedAt = acceptPressedAt;
+        Acknowledgement = acknowledgement;
     }
 
     public void Clear()
     {
         Offer = null;
         AcceptPressedAt = default;
+        Acknowledgement = null;
     }
 }

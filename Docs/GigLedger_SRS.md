@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.6 · 2026-10-03 · DRAFT, for review. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.7 · 2026-10-03 · DRAFT, for review. 0.7 adds entry checks (section 5.9, FR-35 to FR-38): values past a limit are confirmed or explained, never silently stored, and values that cannot be true are refused. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -207,6 +207,40 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   operations the UI calls.
 - **FR-34** The API and the UI call the same core services. Neither contains business logic the
   other lacks.
+
+### 5.9 Entry checks (Slice 4)
+
+Their purpose is to catch entry errors at the moment of entry: a mistyped miles or minutes figure
+inflates the mileage deduction or wrecks $/hr. The driver's rule: *"anything above the ridiculous
+threshold requires documentation to be used."*
+
+- **FR-35 Three levels.** A checked value at or below its **confirm** limit is stored as entered.
+  Above it, the entry is stored only after the driver confirms it, and the record is marked
+  **confirmed**. Above the **document** limit, the entry is stored only with a written explanation
+  and a second, deliberate confirm, and the record is marked **explained**. Nothing past a limit is
+  refused (an explained value may be real: "maybe there is a reason the calculation shows the
+  anomaly"). The driver authorizes their own entries; there are no roles.
+- **FR-36 The limits are data**, stored as versions like the settings (FR-25), never in code. Initial
+  values, and where each is checked:
+
+  | Limit | Checked when | Confirm above | Document above |
+  |---|---|---|---|
+  | Pay per trip (base, before tip) | an offer is accepted or declined | $80 | $250 |
+  | Speed: (route + return miles) over elapsed time | a trip's actuals are entered | 60 mph | 90 mph |
+  | Trip length: route + return miles | a trip's actuals are entered | 50 mi | 150 mi |
+  | Tip per trip | a tip is recorded | $40 | $150 |
+  | Shift length | a shift ends | 12 h | 16 h |
+
+  The offer's stated miles and time estimate are not checked: they feed only the forecast, never the
+  mileage log.
+- **FR-37 Refused outright**, with a sentence saying why, because no explanation makes them true:
+  negative pay, tip, miles, or minutes; a shift start time more than 5 minutes after the current
+  time; a shift longer than 24 hours; a charge session whose kWh is more than the battery size plus
+  25% (the plug measures energy before charging losses, which run well under 25%). The battery size
+  is data, entered per vehicle; the initial value is 64.8 kWh.
+- **FR-38 Explained-values report.** Every explained value stays marked and appears on one report:
+  the date, the record, the limit, the value, the limit it passed, and the explanation, for review
+  before filing. Confirmed values stay marked on their records.
 
 ## 6. Non-functional requirements
 

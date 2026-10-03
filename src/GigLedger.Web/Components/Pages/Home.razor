@@ -14,6 +14,11 @@
     <p class="error">@error</p>
 }
 
+@if (pending is not null)
+{
+    <AcknowledgePanel Pending="pending" OnAcknowledge="Acknowledge" OnCancel="() => pending = null" />
+}
+
 @if (closedShift is not null)
 {
     <p>Shift ended. <a id="summary" href="@($"/shifts/{closedShift}/summary")">See the summary</a></p>
@@ -119,6 +124,10 @@ else
     private Guid? closedShift;
     private string? error;
 
+    // SDD 6.10: a value past a limit waits here for the driver's confirm, then the same action runs again.
+    private NeedsAcknowledgementException? pending;
+    private Action<Acknowledgement?>? retry;
+
     private string platform = "Spark";
     private decimal? startOdometer, endOdometer;
     private DateTime startTime, endTime;
@@ -143,18 +152,33 @@ else
 
     private DateTimeOffset Local(DateTime time) => new(time, Clock.LocalTimeZone.GetUtcOffset(time));
 
-    private void Attempt(Action action)
+    private void Attempt(Action action) => Attempt(_ => action());
+
+    /// <summary>Runs a storing action; past a limit, keeps it to run again once acknowledged.</summary>
+    private void Attempt(Action<Acknowledgement?> action, Acknowledgement? acknowledgement = null)
     {
         error = null;
         try
         {
-            action();
+            action(acknowledgement);
+            pending = null;
             Load();
+        }
+        catch (NeedsAcknowledgementException e)
+        {
+            pending = e;
+            retry = action;
         }
         catch (Exception e) when (Refusal.IsRefusal(e))
         {
+            pending = null;
             error = Refusal.Reason(e);
         }
+    }
+
+    private void Acknowledge(Acknowledgement acknowledgement)
+    {
+        if (retry is { } action) Attempt(action, acknowledgement);
     }
 
     private void Start()
@@ -166,7 +190,7 @@ else
             // FR-2b: starting the shift completes the held accept, at the moment accept was pressed.
             if (Held.Offer is { } held)
             {
-                Offers.Accept(shift, held, Held.AcceptPressedAt);
+                Offers.Accept(shift, held, Held.AcceptPressedAt, Held.Acknowledgement);
                 Held.Clear();
             }
         });
@@ -180,26 +204,28 @@ else
             error = "Enter the minutes, the route miles, and the return miles.";
             return;
         }
-        Attempt(() => Trips.RecordActuals(trips[index].Id, new GradedActuals(
+        var (trip, entered) = (trips[index].Id, new GradedActuals(
             new(input.Minutes.Value, Grade.Entered),
             new(input.Route.Value, Grade.Entered),
-            new(input.Return.Value, Grade.Entered))));
+            new(input.Return.Value, Grade.Entered)));
+        Attempt(ack => Trips.RecordActuals(trip, entered, ack));
     }
 
     private void SaveTip(int index)
     {
         if (tips[index] is not { } amount) { error = "Enter the tip as it posted."; return; }
-        Attempt(() => Trips.RecordTip(trips[index].Id, amount, Clock.GetLocalNow()));
+        var (trip, at) = (trips[index].Id, Clock.GetLocalNow());
+        Attempt(ack => Trips.RecordTip(trip, amount, at, ack));
     }
 
     private void End()
     {
         if (open is null) return;
         if (endOdometer is null) { error = "Enter the odometer reading."; return; }
-        var id = open.Id;
-        Attempt(() =>
+        var (id, at, odometer) = (open.Id, Local(endTime), new Graded<decimal>(endOdometer.Value, Grade.Measured));
+        Attempt(ack =>
         {
-            Shifts.End(id, Local(endTime), new(endOdometer.Value, Grade.Measured));
+            Shifts.End(id, at, odometer, ack);
             closedShift = id;
         });
     }

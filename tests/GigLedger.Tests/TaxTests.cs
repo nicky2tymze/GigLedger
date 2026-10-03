@@ -164,6 +164,8 @@ public sealed class TaxTests : TestContext
     [Fact]
     public void FR31_PayCountsInTheMonthAcceptedAndTipsInTheMonthPosted()
     {
+        // The clock must be past the shift, or its start is refused as in the future (FR-37).
+        _clock.Now = new(2026, 10, 2, 8, 0, 0, TimeSpan.FromHours(-5));
         var trip = SparkTrip(new(2026, 9, 30, 20, 0, 0, TimeSpan.FromHours(-5)), 34.89m);
         ((ITripService)_ledger).RecordTip(trip, 6.00m, new(2026, 10, 1, 8, 0, 0, TimeSpan.FromHours(-5)));
         var months = Taxes.RecordedByMonth(2026, "Spark");
