@@ -8,6 +8,7 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
     public DbSet<ShiftRow> Shifts => Set<ShiftRow>();
     public DbSet<ShiftCloseRow> ShiftCloses => Set<ShiftCloseRow>();
     public DbSet<TripRow> Trips => Set<TripRow>();
+    public DbSet<DeclineRow> Declines => Set<DeclineRow>();
     public DbSet<TripActualsRow> TripActuals => Set<TripActualsRow>();
     public DbSet<SettingsRow> Settings => Set<SettingsRow>();
     public DbSet<ChargeSessionRow> ChargeSessions => Set<ChargeSessionRow>();
@@ -31,12 +32,14 @@ public sealed class LedgerContext(DbContextOptions<LedgerContext> options) : DbC
         conventions.Properties<Core.AttachedTo>().HaveConversion<string>();
         conventions.Properties<Core.TaxForm>().HaveConversion<string>();
         conventions.Properties<Core.PayoutType>().HaveConversion<string>();
+        conventions.Properties<Core.Verdict>().HaveConversion<string>();
     }
 
     protected override void OnModelCreating(ModelBuilder model)
     {
         model.Entity<ShiftCloseRow>().HasIndex(r => r.ShiftId);
         model.Entity<TripRow>().HasIndex(r => r.ShiftId);
+        model.Entity<DeclineRow>().HasIndex(r => r.ShiftId);
         model.Entity<TripActualsRow>().HasIndex(r => r.TripId);
         model.Entity<TipRow>().HasIndex(r => r.TripId);
         model.Entity<DriveRow>().HasIndex(r => r.ShiftId);

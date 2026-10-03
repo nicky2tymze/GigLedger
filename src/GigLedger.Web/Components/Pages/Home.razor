@@ -2,6 +2,8 @@
 @inject IShiftService Shifts
 @inject ITripService Trips
 @inject TimeProvider Clock
+@inject IOfferService Offers
+@inject HeldOffer Held
 
 <PageTitle>Shift · GigLedger</PageTitle>
 
@@ -21,6 +23,14 @@
 {
     <section>
         <h2>Start a shift</h2>
+        @if (Held.Offer is { } held)
+        {
+            <p id="held-offer">
+                Accepted at @Display.Time(Held.AcceptPressedAt), waiting for this shift:
+                @Display.Money(held.Pay.Value), @Display.Miles(held.StatedMiles.Value) stated, @held.Drops drops.
+                Starting the shift records it.
+            </p>
+        }
         <div class="form">
             <label>Platform <input id="platform" @bind="platform" /></label>
             <label>Odometer <input id="start-odometer" type="number" step="0.1" @bind="startOdometer" /></label>
@@ -116,6 +126,9 @@ else
     protected override void OnInitialized()
     {
         startTime = endTime = Clock.GetLocalNow().DateTime;
+        // FR-2b: a held offer's accept moment is the shift's default start, so the trip is never earlier.
+        if (Held.Offer is not null)
+            startTime = Held.AcceptPressedAt.DateTime;
         Load();
     }
 
@@ -147,7 +160,16 @@ else
     private void Start()
     {
         if (startOdometer is null) { error = "Enter the odometer reading."; return; }
-        Attempt(() => Shifts.Start(platform, Local(startTime), new(startOdometer.Value, Grade.Measured)));
+        Attempt(() =>
+        {
+            var shift = Shifts.Start(platform, Local(startTime), new(startOdometer.Value, Grade.Measured));
+            // FR-2b: starting the shift completes the held accept, at the moment accept was pressed.
+            if (Held.Offer is { } held)
+            {
+                Offers.Accept(shift, held, Held.AcceptPressedAt);
+                Held.Clear();
+            }
+        });
     }
 
     private void SaveActuals(int index)

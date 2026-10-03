@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.5 · 2026-09-26 · DRAFT, for review. 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.6 · 2026-10-03 · DRAFT, for review. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -64,8 +64,24 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 
 - **FR-1** Record an offer with pay, stated miles, drops, items, the platform's time estimate, and
   the time it was offered.
-- **FR-2** Record the time an offer was accepted. **Declined offers are not recorded.** The
-  forecast in 5.3 can be run on any offer before deciding, and nothing is kept unless it is accepted.
+- **FR-2** Record the time an offer was accepted. The forecast in 5.3 can be run on any offer before
+  deciding; an offer that is only evaluated, neither accepted nor declined, is not kept.
+  **Reversal (0.6):** 0.2 decided that declined offers are not recorded. That left every decline with
+  no trace: which offers were turned down, why, and whether the accept rule agreed. A decline is a
+  decision made on real numbers, so 0.6 records it (FR-2a).
+- **FR-2a Decline an offer, with reasons.** An evaluated offer can be declined. The decline stores
+  the offer's numbers (FR-1), the forecast and the rule's verdict at that moment (FR-11, FR-12), the
+  time, **one or more reasons** from the list below, and an optional note. **"Other" requires the
+  note.** **A decline needs an open shift** and belongs to it; with no shift open there is nothing to
+  decline (the Architect, 2026-10-03). A decline is
+  never deleted (FR-25). The reasons, a fixed list shown in this order:
+  pay too low · too far (includes bad geometry) · too many items · pharmacy · alcohol · heavy ·
+  stairs · apartment · too many drops (batched orders) · low charge · ending shift · other.
+- **FR-2b Accept starts a shift.** Accepting an offer with no shift open takes the driver straight to
+  starting a shift (FR-4), with the offer held. Once the shift is started, the held offer comes back
+  and the accept completes from there. The shift's start time defaults to the moment accept was
+  pressed, so the accepted trip is never earlier than its shift. If no shift is started, the held
+  offer is evaluated only and is not kept (FR-2). (The Architect, 2026-10-03.)
 - **FR-3** For an accepted offer, record actual elapsed time, actual route miles and return miles.
 - **FR-4** Record a shift with start and end odometer readings and start and end times.
 - **FR-5** Record a charge session with kWh, cost, start and end state of charge, **the odometer
@@ -128,6 +144,9 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 ### 5.6 Reporting and import
 
 - **FR-21** Report by day, week, and custom range, with totals and rates.
+- **FR-21a** Report declines for a range: count by reason (an offer with two reasons counts under
+  both), and how many declined offers the accept rule said would clear, against how many it said
+  would not.
 - **FR-22** Import charge sessions from a CSV of charging receipts, one row per receipt, read by
   column name: `receipt_number`, `start_local`, `timezone`, `kwh`, `net_total`, `station_id`,
   `location_name`. Each row becomes a DC fast session with kWh and cost graded measured, and its

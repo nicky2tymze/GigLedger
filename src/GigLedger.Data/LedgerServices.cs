@@ -190,6 +190,81 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         return row.Id;
     }
 
+    // ---- Declines (FR-2a, FR-21a) ----
+
+    public Guid Decline(Guid shiftId, Offer offer, IReadOnlyList<DeclineReason> reasons, string? note, DateTimeOffset declinedAt)
+    {
+        FindShift(shiftId);
+        if (FindClose(shiftId) is not null)
+            throw new InvalidOperationException($"Shift {shiftId} is closed; a decline needs an open shift.");
+        var (ordered, trimmed) = DeclineRules.Validate(reasons, note);
+
+        // The forecast and verdict at this moment (FR-2a), kept as they were.
+        var evaluation = Evaluate(offer);
+        var row = new DeclineRow
+        {
+            RecordedAt = clock.GetUtcNow(),
+            ShiftId = shiftId,
+            Pay = offer.Pay.Value, PayGrade = offer.Pay.Grade,
+            StatedMiles = offer.StatedMiles.Value, StatedMilesGrade = offer.StatedMiles.Grade,
+            Drops = offer.Drops,
+            Items = offer.Items,
+            EstimatedMinutes = offer.EstimatedMinutes.Value, EstimatedMinutesGrade = offer.EstimatedMinutes.Grade,
+            OfferedAt = offer.OfferedAt,
+            ReturnMilesOverride = offer.ReturnMilesOverride,
+            DeclinedAt = declinedAt,
+            ForecastNetPerHour = evaluation.Forecast.Value,
+            ForecastAssumptions = string.Join("\n", evaluation.Forecast.Assumptions.Select(a => $"{a.Input}: {a.Source}")),
+            Verdict = evaluation.Verdict,
+            Threshold = evaluation.Threshold,
+            Reasons = string.Join(",", ordered),
+            Note = trimmed,
+        };
+        db.Declines.Add(row);
+        db.SaveChanges();
+        return row.Id;
+    }
+
+    public IReadOnlyList<StoredDecline> DeclinesOnShift(Guid shiftId)
+    {
+        FindShift(shiftId);
+        // Ordered in memory: SQLite cannot order by DateTimeOffset in SQL.
+        return db.Declines.AsNoTracking().Where(d => d.ShiftId == shiftId).AsEnumerable()
+            .OrderBy(d => d.DeclinedAt)
+            .Select(ToStored)
+            .ToList();
+    }
+
+    public DeclineReport ReportDeclines(DateOnly from, DateOnly to)
+    {
+        // The local date is the date in the decline's own offset; filtered in memory (4.2).
+        var inRange = db.Declines.AsNoTracking().AsEnumerable()
+            .Where(d => DateOnly.FromDateTime(d.DeclinedAt.DateTime) is var day && day >= from && day <= to)
+            .Select(ToStored)
+            .ToList();
+        return DeclineRules.Report(inRange);
+    }
+
+    private static StoredDecline ToStored(DeclineRow d)
+    {
+        var offer = new Offer(
+            new(d.Pay, d.PayGrade),
+            new(d.StatedMiles, d.StatedMilesGrade),
+            d.Drops,
+            d.Items,
+            new(d.EstimatedMinutes, d.EstimatedMinutesGrade),
+            d.OfferedAt,
+            d.ReturnMilesOverride);
+        var assumptions = d.ForecastAssumptions
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Split(": ", 2))
+            .Select(parts => new Assumption(parts[0], parts[1]))
+            .ToList();
+        var reasons = d.Reasons.Split(',').Select(Enum.Parse<DeclineReason>).ToList();
+        return new StoredDecline(d.Id, d.ShiftId, offer, d.DeclinedAt,
+            new Result(d.ForecastNetPerHour, assumptions), d.Verdict, d.Threshold, reasons, d.Note);
+    }
+
     // ---- Trips ----
 
     public void RecordActuals(Guid tripId, GradedActuals actuals)

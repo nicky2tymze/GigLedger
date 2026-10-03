@@ -37,6 +37,7 @@ public sealed class PageTests : TestContext
         var db = LedgerDatabase.Open(_connection);
         _ledger = new LedgerServices(db, _clock);
         Services.AddSingleton<TimeProvider>(_clock);
+        Services.AddSingleton(new HeldOffer());
         Services.AddSingleton<ISettingsService>(_ledger);
         Services.AddSingleton<IOfferService>(_ledger);
         Services.AddSingleton<ITripService>(_ledger);
@@ -88,16 +89,6 @@ public sealed class PageTests : TestContext
         EnterRun11(page, pay: "10.00");
         page.Find("#evaluate").Click();
         Assert.Contains("Does not clear", page.Find("#verdict").TextContent);
-    }
-
-    [Fact]
-    public void UI_Offer_WithoutAnOpenShiftThereIsNothingToAcceptInto()
-    {
-        var page = RenderComponent<OfferPage>();
-        EnterRun11(page);
-        page.Find("#evaluate").Click();
-        Assert.Empty(page.FindAll("#accept"));
-        Assert.NotEmpty(page.FindAll("#no-shift"));
     }
 
     [Fact]

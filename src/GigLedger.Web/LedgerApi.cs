@@ -42,6 +42,18 @@ public static class LedgerApi
             return Results.Created($"/api/trips/{trip}", new Created(trip));
         });
 
+        api.MapPost("/shifts/{id:guid}/declines", (Guid id, DeclineOfferRequest request, IOfferService offers) =>
+        {
+            var decline = offers.Decline(id, request.Offer, request.Reasons, request.Note, request.DeclinedAt);
+            return Results.Created($"/api/shifts/{id}/declines", new Created(decline));
+        });
+
+        api.MapGet("/shifts/{id:guid}/declines", (Guid id, IOfferService offers) =>
+            Results.Ok(offers.DeclinesOnShift(id)));
+
+        api.MapGet("/declines", (DateOnly from, DateOnly to, IOfferService offers) =>
+            Results.Ok(offers.ReportDeclines(from, to)));
+
         api.MapPost("/trips/{id:guid}/actuals", (Guid id, GradedActuals actuals, ITripService trips) =>
         {
             trips.RecordActuals(id, actuals);

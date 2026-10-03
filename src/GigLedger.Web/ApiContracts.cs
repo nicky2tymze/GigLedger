@@ -10,6 +10,8 @@ public sealed record EndShiftRequest(DateTimeOffset EndedAt, Graded<decimal> End
 
 public sealed record AcceptOfferRequest(Offer Offer, DateTimeOffset AcceptedAt);
 
+public sealed record DeclineOfferRequest(Offer Offer, IReadOnlyList<DeclineReason> Reasons, string? Note, DateTimeOffset DeclinedAt);
+
 public sealed record Created(Guid Id);
 
 public sealed record TipRequest(decimal Amount, DateTimeOffset PostedAt);

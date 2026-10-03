@@ -65,6 +65,15 @@ public interface IOfferService
     OfferEvaluation Evaluate(Offer offer);
     /// <summary>Stores the offer as a trip on the shift, with the accept time (FR-1, FR-2).</summary>
     Guid Accept(Guid shiftId, Offer offer, DateTimeOffset acceptedAt);
+    /// <summary>
+    /// FR-2a: stores the offer as declined, with the forecast and verdict at that moment, the
+    /// reasons, and the note. The shift must be open.
+    /// </summary>
+    Guid Decline(Guid shiftId, Offer offer, IReadOnlyList<DeclineReason> reasons, string? note, DateTimeOffset declinedAt);
+    /// <summary>Every decline on the shift, in the order declined.</summary>
+    IReadOnlyList<StoredDecline> DeclinesOnShift(Guid shiftId);
+    /// <summary>FR-21a: declines whose local date is from..to, inclusive.</summary>
+    DeclineReport ReportDeclines(DateOnly from, DateOnly to);
 }
 
 public interface ITripService

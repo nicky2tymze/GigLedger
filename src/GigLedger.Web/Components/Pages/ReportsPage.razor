@@ -1,5 +1,6 @@
 @page "/reports"
 @inject IReportService Reporting
+@inject IOfferService Offers
 @inject TimeProvider Clock
 
 <PageTitle>Reports · GigLedger</PageTitle>
@@ -48,11 +49,27 @@ else if (report is not null)
     }
 }
 
+@if (declines is not null)
+{
+    <h2>Declines</h2>
+    <table class="summary">
+        <tr><th>Offers declined</th><td id="declines-total">@declines.Declines</td></tr>
+        @foreach (var count in declines.ByReason)
+        {
+            <tr><th>@DeclineRules.Label(count.Reason)</th><td id="@($"declines-{count.Reason}")">@count.Count</td></tr>
+        }
+        <tr><th>The rule said it would clear</th><td id="declines-clears">@declines.RuleSaidClears</td></tr>
+        <tr><th>The rule said it would not</th><td id="declines-short">@declines.RuleSaidDoesNotClear</td></tr>
+    </table>
+    <p class="hint">An offer declined for two reasons counts under both.</p>
+}
+
 <p><a id="export-csv" href="@CsvUrl()">Export to CSV</a></p>
 
 @code {
     private DateOnly from, to;
     private PeriodReport? report;
+    private DeclineReport? declines;
     private string? error;
 
     // Built in @code: see the note on TC-34 about strings inside Razor attributes.
@@ -80,10 +97,12 @@ else if (report is not null)
         try
         {
             report = Reporting.Report(from, to);
+            declines = Offers.ReportDeclines(from, to);
         }
         catch (Exception e) when (Refusal.IsRefusal(e))
         {
             report = null;
+            declines = null;
             error = Refusal.Reason(e);
         }
     }

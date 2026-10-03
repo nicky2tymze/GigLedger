@@ -31,6 +31,7 @@ builder.Services.AddScoped<IBackupService>(sp => sp.GetRequiredService<LedgerSer
 builder.Services.AddScoped<IReportService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<ITaxService>(sp => sp.GetRequiredService<LedgerServices>());
 builder.Services.AddScoped<IExportService>(sp => sp.GetRequiredService<LedgerServices>());
+builder.Services.AddScoped<HeldOffer>();
 // NFR-7: where dated backups go. Configurable; never inside the image.
 builder.Services.AddSingleton(new BackupFolder(builder.Configuration["Backup:Folder"] ?? "backups"));
 

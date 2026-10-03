@@ -90,3 +90,10 @@ At close: what this slice did badly.
   order; tips attach to orders; the limits, with a three-level model (confirm, document, refuse only the
   impossible) and an explained-values report.
 - 2026-10-03: Question 4 added and answered (cancel reasons, asked only on a driver cancel).
+- 2026-10-03: **Story 1 built, awaiting the live check and acceptance.** SRS 0.6: FR-2 reversal note,
+  FR-2a declines with reasons (a decline needs an open shift), FR-2b accept starts a shift (added by
+  the Architect), FR-21a decline report. SDD 0.7 section 6.9. 38 tests written first: 35 failed, the 3
+  that passed early (reason order, no decline without a shift, nothing held means nothing accepted)
+  were each shown failing on a planted violation. Suite 300 passed. An existing test caught Declines
+  missing from the full export (FR-32); fixed. Removed `UI_Offer_WithoutAnOpenShiftThereIsNothingToAcceptInto`,
+  which asserted the behaviour FR-2b reverses.

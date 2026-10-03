@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.6 · 2026-09-27 · DRAFT. Designs against SRS 0.5. 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.7 · 2026-10-03 · DRAFT. Designs against SRS 0.6. 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -63,6 +63,7 @@ not checked.
 | **Shift** | vehicle, platform, start time, start odometer | Contains trips. |
 | **ShiftClose** | shift, end time, end odometer | Written once when the shift ends (section 5.3). |
 | **Trip** | the offer as presented (pay, stated miles, drops, items, estimated time, offered time) and the accept time | An offer is only stored once accepted (FR-2), so an offer and its trip are one record. |
+| **Decline** | shift, the offer as presented, the decline time, the forecast, verdict and threshold at that moment, the reasons, a note | A declined offer is its own record, never a trip (FR-2a). Slice 4. |
 | **TripActuals** | trip, elapsed time, route miles, return miles | Written once after the trip (section 5.3). A correction supersedes it. |
 | **ChargeSession** | time, kWh, cost, start and end state of charge, charger, charge type (home or DC fast), purpose (work or personal) | Slice 2. |
 | **Payout** | amount, date posted, kind (base or tip), trip | A tip belongs to exactly one trip and is the whole trip's tip (FR-6). Slice 2. |
@@ -256,6 +257,44 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
 - **Interface.** `POST /api/payouts/import` with the .xlsx as the body; `GET /api/payouts?year=`.
   Linking payouts to logged trips, and using them in the reconciliation (FR-31), come later.
 
+### 6.9 Declines and accept-starts-a-shift (Slice 4, story 1: FR-2a, FR-2b, FR-21a)
+
+- **Reasons (FR-2a).** `DeclineReason` is an enum whose declaration order is the display order:
+  `PayTooLow, TooFar, TooManyItems, Pharmacy, Alcohol, Heavy, Stairs, Apartment, TooManyDrops,
+  LowCharge, EndingShift, Other`. Stored by name, like every enum (a reorder cannot change a stored
+  decline). Each has a label for the screen (`TooFar` reads "Too far (includes bad geometry)").
+- **Declining.** `IOfferService.Decline(shiftId, offer, reasons, note, declinedAt)` evaluates the
+  offer at that moment (6.1) and stores the offer, the forecast value and its assumptions, the
+  verdict, the threshold, the reasons and the note. **Refused:** no such shift, or the shift is
+  closed; no reason; a reason given twice; `Other` without a note (blank counts as none). The note
+  is trimmed; an empty note is stored as none.
+- **Storage.** A new append-only table, `Declines` (FR-25 triggers in their own migration, as for
+  `Payouts`). The offer's fields as in `Trips`; `ForecastNetPerHour` and `Threshold` as decimal;
+  `Verdict` by name; `ForecastAssumptions` as text, one `input: source` per line, so a stored
+  forecast still names what it rested on (NFR-2); `Reasons` as their names, comma separated, in
+  display order; `Note` nullable.
+- **Reading back.** `IOfferService.DeclinesOnShift(shiftId)`, in decline order.
+- **The report (FR-21a).** `IOfferService.ReportDeclines(from, to)` over declines whose local
+  decline date is in the range, inclusive: the total; a count for **every** reason in display
+  order, zeros included (a decline with two reasons counts under both, so the counts can sum past
+  the total); and the counts the rule said would clear and would not. Summed in Core, in memory
+  (4.2).
+- **Accept starts a shift (FR-2b).** The Offer page holds the offer in a per-session `HeldOffer`
+  service (scoped, so one browser session's offer never reaches another) with the moment accept
+  was pressed, and goes to the Shift page. The Shift page, finding a held offer, shows it and sets
+  the start time to that moment. **Starting the shift completes the accept:** the held offer is
+  accepted onto the new shift with its original accept time, no second press, and the hold is
+  cleared. Leaving without starting stores nothing; the hold dies with the session. The service
+  layer is unchanged: it is `Start` then `Accept`, both existing operations.
+- **Interfaces.** `POST /api/shifts/{id}/declines` (`IOfferService.Decline`); `GET /api/shifts/{id}/declines`
+  (`IOfferService.DeclinesOnShift`); `GET
+  /api/declines?from=&to=` (`IOfferService.ReportDeclines`). The hold is a page concern; the API
+  client starts a shift and accepts, as it does today.
+- **Screens.** Offer: a **Decline** button beside Accept, only with a shift open; it opens the reason
+  list as checkboxes in display order and a note field, and **Confirm decline** stores it. With no
+  shift open, Accept reads **Accept and start a shift**; there is no Decline. Reports: a declines
+  table for the range, by reason, with the clears / does-not-clear counts.
+
 ### 6.4 Guards
 
 - Zero or negative hours or miles return an error, never a division by zero or infinity.
@@ -269,7 +308,7 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
 
 | Service | Operations |
 |---|---|
-| `IOfferService` | `Evaluate(offer)` → forecast and verdict, stores nothing · `Accept(offer, shiftId)` → trip |
+| `IOfferService` | `Evaluate(offer)` → forecast and verdict, stores nothing · `Accept(offer, shiftId)` → trip · `Decline(...)`, `DeclinesOnShift(shiftId)`, `ReportDeclines(from, to)` (6.9) |
 | `ITripService` | `RecordActuals(tripId, actuals)` · `Get(tripId)` → trip with its rates |
 | `IShiftService` | `Start(...)` · `End(shiftId, time, odometer)` · `Summary(shiftId)` |
 | `ISettingsService` | `Get()` · `Set(...)`, which stores a new version (section 5.3) |

@@ -49,6 +49,31 @@ public sealed class TripRow : LedgerRecord
     public DateTimeOffset AcceptedAt { get; set; }
 }
 
+/// <summary>A declined offer (FR-2a, SDD 6.9): the offer as presented, the forecast then, and why.</summary>
+public sealed class DeclineRow : LedgerRecord
+{
+    public Guid ShiftId { get; set; }
+    public decimal Pay { get; set; }
+    public Grade PayGrade { get; set; }
+    public decimal StatedMiles { get; set; }
+    public Grade StatedMilesGrade { get; set; }
+    public int Drops { get; set; }
+    public int Items { get; set; }
+    public int EstimatedMinutes { get; set; }
+    public Grade EstimatedMinutesGrade { get; set; }
+    public DateTimeOffset OfferedAt { get; set; }
+    public decimal? ReturnMilesOverride { get; set; }
+    public DateTimeOffset DeclinedAt { get; set; }
+    public decimal ForecastNetPerHour { get; set; }
+    /// <summary>What the forecast rested on, one "input: source" per line; empty when nothing (NFR-2).</summary>
+    public string ForecastAssumptions { get; set; } = "";
+    public Verdict Verdict { get; set; }
+    public decimal Threshold { get; set; }
+    /// <summary>Reason names, comma separated, in display order.</summary>
+    public string Reasons { get; set; } = "";
+    public string? Note { get; set; }
+}
+
 public sealed class TripActualsRow : LedgerRecord
 {
     public Guid TripId { get; set; }
