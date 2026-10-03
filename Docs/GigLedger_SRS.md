@@ -235,7 +235,8 @@ threshold requires documentation to be used."*
   mileage log.
 - **FR-37 Refused outright**, with a sentence saying why, because no explanation makes them true:
   negative pay, tip, miles, or minutes; a shift start time more than 5 minutes after the current
-  time; a shift longer than 24 hours; a charge session whose kWh is more than the battery size plus
+  time; a shift longer than 24 hours; a trip whose elapsed time is longer than 24 hours (added by the
+  Architect after the live check, 2026-10-03); a charge session whose kWh is more than the battery size plus
   25% (the plug measures energy before charging losses, which run well under 25%). The battery size
   is data, entered per vehicle; the initial value is 64.8 kWh.
 - **FR-38 Explained-values report.** Every explained value stays marked and appears on one report:

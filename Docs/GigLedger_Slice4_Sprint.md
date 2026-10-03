@@ -113,3 +113,7 @@ At close: what this slice did badly.
   the checks let through; the decimal-precision test records its large pay with an explanation; a tax
   test's clock was earlier than its own shift; the export now includes Limits and EntryMarks. Suite 356
   passed. Deferred: marks shown beside each record on screen.
+- 2026-10-03: **Story 2 ACCEPTED (the Architect)** after a live check: a $500 pay, a 1,200-mile trip, and a
+  $1,000 tip each went through the explanation step and were marked; nothing stored without one. Found in
+  the check: a trip of 8,000 minutes passed, since over 1,200 miles that is only 9 mph and no limit covered
+  trip time. His call: refuse a trip over 24 hours (FR-37). Test first, seen failing.

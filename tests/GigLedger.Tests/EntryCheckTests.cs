@@ -138,6 +138,15 @@ public sealed class EntryRuleTests
         Assert.Throws<ArgumentOutOfRangeException>(() => EntryChecks.RefuseImpossibleActuals(new TripActuals(minutes, (decimal)route, (decimal)back)));
 
     [Fact]
+    public void FR37_ATripOf24HoursIsAllowedAMinuteMoreIsNot()
+    {
+        // Found in the live check: 8,000 minutes over 1,200 miles is only 9 mph, so speed never objected.
+        EntryChecks.RefuseImpossibleActuals(new TripActuals(1440, 600m, 600m));
+        var e = Assert.Throws<ArgumentOutOfRangeException>(() => EntryChecks.RefuseImpossibleActuals(new TripActuals(1441, 600m, 600m)));
+        Assert.Contains("24 hours", e.Message);
+    }
+
+    [Fact]
     public void FR37_AStartFiveMinutesAheadIsAllowedOneSecondMoreIsNot()
     {
         var now = new DateTimeOffset(2026, 8, 2, 6, 0, 0, TimeSpan.FromHours(-5));

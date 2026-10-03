@@ -149,11 +149,16 @@ public static class EntryChecks
             throw new ArgumentOutOfRangeException(nameof(value), value, $"{what} cannot be negative.");
     }
 
-    /// <summary>Refuses negative miles or minutes, and zero minutes: speed divides by them.</summary>
+    /// <summary>
+    /// Refuses negative miles or minutes, zero minutes (speed divides by them), and more than 24 hours
+    /// (no trip outlasts the longest shift).
+    /// </summary>
     public static void RefuseImpossibleActuals(TripActuals actuals)
     {
         if (actuals.ElapsedMinutes <= 0)
             throw new ArgumentOutOfRangeException(nameof(actuals), actuals.ElapsedMinutes, "A trip takes time: minutes must be more than zero.");
+        if (actuals.ElapsedMinutes > 24 * 60)
+            throw new ArgumentOutOfRangeException(nameof(actuals), actuals.ElapsedMinutes, "A trip cannot take longer than 24 hours.");
         RefuseNegative(actuals.RouteMiles, "Route miles");
         RefuseNegative(actuals.ReturnMiles, "Return miles");
     }

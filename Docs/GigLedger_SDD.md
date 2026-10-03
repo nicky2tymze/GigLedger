@@ -322,7 +322,8 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   `SaveChanges` as the record, so a record and its mark cannot come apart.
 - **Refusals (FR-37).** Thrown as `ArgumentException` with the sentence, before any check or store:
   negative pay (accept, decline), negative tip, negative minutes or miles in actuals (and zero
-  minutes, since speed divides by them and a trip takes time); a shift start more than 5 minutes after
+  minutes, since speed divides by them and a trip takes time, and more than 1,440 minutes, since no
+  trip outlasts the longest shift); a shift start more than 5 minutes after
   the clock; a shift end more than 24 hours after its start; a charge whose kWh is over the battery
   size times 1.25 (`Record`, `CorrectCharge`, and the charge import, where it stops the file as FR-22
   says for any row FR-5 refuses).
