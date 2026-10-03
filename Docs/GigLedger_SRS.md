@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.9 · 2026-10-03 · DRAFT, for review. 0.9 drops the tip-tracking setting: the accept screen always offers the promised tip, and entering it is what tracks a trip; the tip can be added or changed after accept (FR-6a). 0.8 makes an offer's pay the total the platform shows, tip included, and **reverses 0.2's tip rule** (FR-6): a recorded tip is never added on top of that total; optional tip tracking (FR-6a) records the promised tip and what posts. 0.7 adds entry checks (section 5.9, FR-35 to FR-38): values past a limit are confirmed or explained, never silently stored, and values that cannot be true are refused. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.10 · 2026-10-03 · DRAFT, for review. 0.10 adds cancelled trips (FR-3a, FR-21b) and defaults a one-drop trip's return miles to its route miles (FR-3). 0.9 drops the tip-tracking setting: the accept screen always offers the promised tip, and entering it is what tracks a trip; the tip can be added or changed after accept (FR-6a). 0.8 makes an offer's pay the total the platform shows, tip included, and **reverses 0.2's tip rule** (FR-6): a recorded tip is never added on top of that total; optional tip tracking (FR-6a) records the promised tip and what posts. 0.7 adds entry checks (section 5.9, FR-35 to FR-38): values past a limit are confirmed or explained, never silently stored, and values that cannot be true are refused. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -84,7 +84,25 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   and the accept completes from there. The shift's start time defaults to the moment accept was
   pressed, so the accepted trip is never earlier than its shift. If no shift is started, the held
   offer is evaluated only and is not kept (FR-2). (The Architect, 2026-10-03.)
-- **FR-3** For an accepted offer, record actual elapsed time, actual route miles and return miles.
+- **FR-3** For an accepted offer, record actual elapsed time, actual route miles and return miles. **On a
+  one-drop trip the return miles default to the route miles** (the Architect, 2026-10-03); the driver can
+  enter a different figure.
+- **FR-3a Cancelled trips.** An accepted trip whose actuals are not yet recorded can be cancelled
+  instead. The cancel records **the time it was cancelled**, **who cancelled** (customer, store,
+  platform, or the driver), and **when** (before pickup, after pickup, or at the door). Only a driver
+  cancel asks **why**, from this list in this order: order not ready · unreachable · wrong address ·
+  customer issue (for example dogs, attitude) · emergency · car problems · other; an optional note,
+  required with "other". "Customer cancelled" is not a reason: the who-cancelled field carries it.
+  - **Not shopped** (before pickup): it paid **nothing**, has **0 miles**, and **no trip time**; the
+    time spent becomes the shift's unpaid time, like waiting between trips.
+  - **Shopped** (after pickup, or at the door): it paid **the pay minus the tip**. If no promised tip
+    was entered (FR-6a), the cancel asks for it. The driver enters the **minutes**, which count as
+    trip time, and the **route and return miles** actually driven, the route starting from the
+    offer's stated miles, and the return defaulting to the route miles when the offer had one drop;
+    the **mileage adjustment** (route miles minus stated miles) is shown. The entry checks apply as
+    to any actuals (FR-35 to FR-37).
+  - A cancel is stored once and never deleted (FR-25). A tip that posts on a cancelled trip is
+    recorded and added to what it paid, since that pay excludes the tip.
 - **FR-4** Record a shift with start and end odometer readings and start and end times.
 - **FR-5** Record a charge session with kWh, cost, start and end state of charge, **the odometer
   reading at the session**, charger, and whether the energy was for work or personal driving. Every session has a **charge type**: home
@@ -170,6 +188,8 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 - **FR-21a** Report declines for a range: count by reason (an offer with two reasons counts under
   both), and how many declined offers the accept rule said would clear, against how many it said
   would not.
+- **FR-21b** Report cancellations for a range: how many, by who cancelled, by when, and by the
+  driver's reason; what they paid; and the miles driven on shopped cancels.
 - **FR-22** Import charge sessions from a CSV of charging receipts, one row per receipt, read by
   column name: `receipt_number`, `start_local`, `timezone`, `kwh`, `net_total`, `station_id`,
   `location_name`. Each row becomes a DC fast session with kWh and cost graded measured, and its

@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.10 · 2026-10-03 · DRAFT. Designs against SRS 0.9. 0.10 drops the TrackTips setting from 6.11 and lets the promised tip be added or changed after accept. 0.9 adds section 6.11, tip tracking, and replaces the tip rule in 6.5 (Slice 4, story 3). 0.8 adds section 6.10, entry checks (Slice 4, story 2). 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.11 · 2026-10-03 · DRAFT. Designs against SRS 0.10. 0.11 adds section 6.12, cancelled trips (Slice 4, story 4). 0.10 drops the TrackTips setting from 6.11 and lets the promised tip be added or changed after accept. 0.9 adds section 6.11, tip tracking, and replaces the tip rule in 6.5 (Slice 4, story 3). 0.8 adds section 6.10, entry checks (Slice 4, story 2). 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -382,6 +382,39 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   reason box, on a tracked one. The Shift page shows a tracked trip's tip as
   *pending* or *all in* with the adjustment, records posted tips at any time, and shows **All tips
   in** only once it opens.
+
+### 6.12 Cancelled trips (Slice 4, story 4: FR-3a, FR-21b)
+
+- **Types.** `CancelledBy` (Customer, Store, Platform, Driver), `CancelStage` (BeforePickup,
+  AfterPickup, AtTheDoor; shopped = not BeforePickup), `CancelReason` (the SRS list; declaration
+  order is display order; stored by name), and `Cancellation(at, by, stage, reason, note)`.
+  `CancelRules.Validate`: a driver cancel needs a reason and any other cancel has none; "other" needs a
+  note; the note is trimmed, a blank one is none.
+- **Cancelling.** `ITripService.Cancel(tripId, cancellation, actuals, promisedTip, acknowledgement)`.
+  Refused: no such trip, actuals already recorded, already cancelled. **Not shopped:** actuals must not
+  be given; paid is 0. **Shopped:** actuals are required and go through the actuals refusals and checks
+  (6.10), stored as the trip's `TripActuals` so every existing calculation sees them; if the trip has no
+  promised tip, `promisedTip` is required and is stored as a `PromisedTips` row with the reason "given
+  at cancel"; paid = pay minus the promised tip.
+- **Storage.** A new append-only table, `Cancels` (trip, time, by, stage, reason, note, paid), triggers in
+  their own migration. `StoredTrip` gains the cancellation and what it paid.
+- **The arithmetic.** A cancelled trip's tip state is base = what it paid, counted = the tips posted on
+  it, never pending; so its gross is paid plus posted. The shift summary includes shopped cancels as
+  trips (their minutes and miles); a not-shopped cancel contributes nothing and is left out, so its
+  time falls into the shift's unpaid time and the odometer still counts its miles. Tax months: what it
+  paid in the month accepted, each posted tip in the month it posted.
+- **The report (FR-21b).** `ITripService.ReportCancels(from, to)` over cancels whose local cancel date is
+  in range: the count; counts by who, by when, and by reason (every value listed, zeros included);
+  total paid; miles on shopped cancels.
+- **Interfaces.** `POST /api/trips/{id}/cancel`; `GET /api/cancellations?from=&to=`.
+- **Screens.** On the Shift page, a trip with no actuals has **Cancel** beside **Save**. It opens: who,
+  when, the reason (driver only), a note, the cancel time (defaulting to now); and for a shopped cancel,
+  minutes, route miles (starting from the offer's stated miles), return miles (defaulting to the route
+  miles on a one-drop offer), and the tip if none was entered. A cancelled trip shows as cancelled, with
+  who, when, what it paid, and the mileage adjustment. Reports: a cancellations table.
+- **Return default (FR-3).** On the Shift page, a one-drop trip's return box takes the route miles when
+  it is left blank, for actuals and for a shopped cancel alike. A screen default, not a service rule: the
+  API still takes whatever return it is sent.
 
 ### 6.4 Guards
 

@@ -141,3 +141,10 @@ At close: what this slice did badly.
   the decision rests on *"the insignificance of cash tipping in this game, not to avoid taxes."* Cash tips
   are rare in delivery driving. YAGNI for this slice; *"it will probably be implemented in some form at
   some time."*
+- 2026-10-03: **Story 4 built, awaiting the live check and acceptance.** His answers: not shopped pays nothing,
+  0 miles, and its time is the shift's unpaid time; shopped pays the pay minus the tip (the cancel asks for
+  the tip if none was entered), its minutes are trip time, its miles start from the offer's (the mileage
+  adjustment shown); the cancel time is captured; a tip posted on a cancel adds to what it paid; return
+  miles are their own field; a cancel is final. Also his: a one-drop trip's return always defaults to its
+  route (FR-3). SRS 0.10, SDD 0.11 section 6.12. 25 tests written first: 23 failed, the 2 that passed early
+  were shown failing on planted violations (one test helper bug fixed: it started a second shift). Suite 425.

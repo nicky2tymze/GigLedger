@@ -164,6 +164,76 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
     private PromisedTipRow? CurrentPromisedTip(Guid tripId) =>
         Current(db.PromisedTips.AsNoTracking().Where(p => p.TripId == tripId)).SingleOrDefault();
 
+    public void Cancel(Guid tripId, Cancellation cancellation, GradedActuals? actuals = null, decimal? promisedTip = null, Acknowledgement? acknowledgement = null)
+    {
+        var row = FindTrip(tripId);
+        if (FindActuals(tripId) is not null)
+            throw new InvalidOperationException($"Trip {tripId} already has actuals, so it was not cancelled.");
+        if (db.Cancels.Any(c => c.TripId == tripId))
+            throw new InvalidOperationException($"Trip {tripId} is already cancelled.");
+        var cancel = CancelRules.Validate(cancellation);
+
+        var paid = 0m;
+        if (!cancel.Shopped)
+        {
+            if (actuals is not null)
+                throw new ArgumentException("Cancelled before pickup: no miles or minutes to enter.", nameof(actuals));
+        }
+        else
+        {
+            if (actuals is null)
+                throw new ArgumentException("A shopped cancel needs the minutes and miles you drove.", nameof(actuals));
+            // FR-3a: paid is the pay minus the tip, so the tip must be known.
+            var current = ToStored(row).Offer.PromisedTip?.Value;
+            if (current is null && promisedTip is null)
+                throw new ArgumentException("A shopped cancel pays the pay minus the tip: enter the tip from the offer.", nameof(promisedTip));
+            var tip = current ?? promisedTip!.Value;
+            TipAccounting.RefuseImpossiblePromise(row.Pay, tip);
+            CheckActuals(tripId, actuals, acknowledgement);
+            if (current is null)
+                db.PromisedTips.Add(new PromisedTipRow
+                {
+                    RecordedAt = clock.GetUtcNow(), CorrectionReason = "given at cancel",
+                    TripId = tripId, Amount = tip, AmountGrade = Grade.Stated,
+                });
+            db.TripActuals.Add(new TripActualsRow
+            {
+                RecordedAt = clock.GetUtcNow(),
+                TripId = tripId,
+                ElapsedMinutes = actuals.ElapsedMinutes.Value, ElapsedMinutesGrade = actuals.ElapsedMinutes.Grade,
+                RouteMiles = actuals.RouteMiles.Value, RouteMilesGrade = actuals.RouteMiles.Grade,
+                ReturnMiles = actuals.ReturnMiles.Value, ReturnMilesGrade = actuals.ReturnMiles.Grade,
+            });
+            paid = row.Pay - tip;
+        }
+
+        db.Cancels.Add(new CancelRow
+        {
+            RecordedAt = clock.GetUtcNow(),
+            TripId = tripId,
+            At = cancel.At,
+            By = cancel.By,
+            Stage = cancel.Stage,
+            Reason = cancel.Reason,
+            Note = cancel.Note,
+            Paid = paid,
+        });
+        db.SaveChanges();
+    }
+
+    public CancelReport ReportCancels(DateOnly from, DateOnly to)
+    {
+        // The local date is the date in the cancel's own offset; filtered in memory (4.2).
+        var cancels = db.Cancels.AsNoTracking().AsEnumerable()
+            .Where(c => DateOnly.FromDateTime(c.At.DateTime) is var day && day >= from && day <= to)
+            .Select(c => (Cancel: ToCancel(c), Miles: FindActuals(c.TripId) is { } a ? a.RouteMiles + a.ReturnMiles : 0m))
+            .ToList();
+        return CancelRules.Report(cancels);
+    }
+
+    private static StoredCancel ToCancel(CancelRow c) =>
+        new(new Cancellation(c.At, c.By, c.Stage, c.Reason, c.Note), c.Paid);
+
     public void MarkAllTipsIn(Guid tripId, DateTimeOffset at)
     {
         var trip = ToStored(FindTrip(tripId));
@@ -385,7 +455,9 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         // FR-6: every posted tip, summed; null when none has posted.
         var tips = db.Tips.AsNoTracking().Where(x => x.TripId == t.Id).ToList();
         var posted = tips.Count == 0 ? (Graded<decimal>?)null : new Graded<decimal>(tips.Sum(x => x.Amount), Grade.Stated);
-        return new StoredTrip(t.Id, t.ShiftId, offer, t.AcceptedAt, actuals, posted, db.TipsIn.Any(x => x.TripId == t.Id));
+        var cancel = db.Cancels.AsNoTracking().SingleOrDefault(c => c.TripId == t.Id);
+        return new StoredTrip(t.Id, t.ShiftId, offer, t.AcceptedAt, actuals, posted, db.TipsIn.Any(x => x.TripId == t.Id),
+            cancel is null ? null : ToCancel(cancel));
     }
 
     // ---- Shifts ----
@@ -464,6 +536,8 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         var trips = new List<TripRecord>();
         foreach (var t in db.Trips.Where(t => t.ShiftId == shiftId).ToList())
         {
+            // SDD 6.12: a not-shopped cancel adds nothing; its time is the shift's unpaid time.
+            if (db.Cancels.Any(c => c.TripId == t.Id && c.Stage == CancelStage.BeforePickup)) continue;
             var a = FindActuals(t.Id)
                 ?? throw new InvalidOperationException($"Trip {t.Id} has no actuals; the shift cannot be summarized yet.");
             // SDD 6.11: the base and the tip counted in gross, so a posted tip is never added on top of pay.

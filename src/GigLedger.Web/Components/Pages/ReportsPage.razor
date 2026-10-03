@@ -2,6 +2,7 @@
 @inject IReportService Reporting
 @inject IOfferService Offers
 @inject IEntryCheckService Checks
+@inject ITripService Trips
 @inject TimeProvider Clock
 
 <PageTitle>Reports · GigLedger</PageTitle>
@@ -65,6 +66,28 @@ else if (report is not null)
     <p class="hint">An offer declined for two reasons counts under both.</p>
 }
 
+@if (cancels is not null)
+{
+    <h2>Cancellations</h2>
+    <table class="summary" id="cancellations">
+        <tr><th>Trips cancelled</th><td id="cancels-total">@cancels.Cancels</td></tr>
+        @foreach (var c in cancels.ByWho)
+        {
+            <tr><th>By @CancelRules.Label(c.Value).ToLowerInvariant()</th><td>@c.Count</td></tr>
+        }
+        @foreach (var c in cancels.ByWhen)
+        {
+            <tr><th>@CancelRules.Label(c.Value)</th><td>@c.Count</td></tr>
+        }
+        @foreach (var c in cancels.ByReason)
+        {
+            <tr><th>Mine: @CancelRules.Label(c.Value)</th><td>@c.Count</td></tr>
+        }
+        <tr><th>They paid</th><td id="cancels-paid">@Display.Money(cancels.Paid)</td></tr>
+        <tr><th>Miles on shopped cancels</th><td>@Display.Miles(cancels.ShoppedMiles)</td></tr>
+    </table>
+}
+
 @if (explained is not null)
 {
     <h2>Explained values</h2>
@@ -99,6 +122,7 @@ else if (report is not null)
     private PeriodReport? report;
     private DeclineReport? declines;
     private IReadOnlyList<EntryMark>? explained;
+    private CancelReport? cancels;
     private string? error;
 
     // Built in @code: see the note on TC-34 about strings inside Razor attributes.
@@ -128,12 +152,14 @@ else if (report is not null)
             report = Reporting.Report(from, to);
             declines = Offers.ReportDeclines(from, to);
             explained = Checks.ExplainedValues(from, to);
+            cancels = Trips.ReportCancels(from, to);
         }
         catch (Exception e) when (Refusal.IsRefusal(e))
         {
             report = null;
             declines = null;
             explained = null;
+            cancels = null;
             error = Refusal.Reason(e);
         }
     }

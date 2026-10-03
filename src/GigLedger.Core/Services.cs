@@ -14,10 +14,16 @@ public sealed record OfferEvaluation(Result Forecast, Verdict Verdict, decimal T
 /// A stored trip: the offer as accepted, its actuals once recorded, the sum of its posted tips (null when
 /// none has posted), and whether all its tips are in (FR-6, FR-6a).
 /// </summary>
-public sealed record StoredTrip(Guid Id, Guid ShiftId, Offer Offer, DateTimeOffset AcceptedAt, GradedActuals? Actuals, Graded<decimal>? Tip = null, bool AllTipsIn = false)
+public sealed record StoredTrip(Guid Id, Guid ShiftId, Offer Offer, DateTimeOffset AcceptedAt, GradedActuals? Actuals, Graded<decimal>? Tip = null, bool AllTipsIn = false,
+    StoredCancel? Cancel = null)
 {
-    /// <summary>Base, the tip counted in gross, pending or not, and the adjustment (SDD 6.11).</summary>
-    public TipState Tips => TipAccounting.State(Offer.Pay.Value, Offer.PromisedTip?.Value, Tip?.Value ?? 0m, AllTipsIn);
+    /// <summary>
+    /// Base, the tip counted in gross, pending or not, and the adjustment (SDD 6.11). A cancelled trip's base is
+    /// what it paid, and its posted tips are added, since that pay excludes the tip (SDD 6.12).
+    /// </summary>
+    public TipState Tips => Cancel is { } c
+        ? new TipState(false, c.Paid, Tip?.Value ?? 0m, false, Tip?.Value ?? 0m, null)
+        : TipAccounting.State(Offer.Pay.Value, Offer.PromisedTip?.Value, Tip?.Value ?? 0m, AllTipsIn);
 
     /// <summary>When "all tips in" can first be marked.</summary>
     public DateTimeOffset AllTipsInOpensAt => TipAccounting.AllTipsInOpensAt(AcceptedAt, Actuals?.ElapsedMinutes.Value);
@@ -100,6 +106,13 @@ public interface ITripService
     /// filling a blank does not.
     /// </summary>
     void SetPromisedTip(Guid tripId, decimal amount, string? reason = null, Acknowledgement? acknowledgement = null);
+    /// <summary>
+    /// FR-3a: cancels a trip whose actuals are not recorded. A shopped cancel needs its actuals, and the
+    /// promised tip when the trip has none; a not-shopped one takes neither.
+    /// </summary>
+    void Cancel(Guid tripId, Cancellation cancellation, GradedActuals? actuals = null, decimal? promisedTip = null, Acknowledgement? acknowledgement = null);
+    /// <summary>FR-21b: cancels whose local date is from..to, inclusive.</summary>
+    CancelReport ReportCancels(DateOnly from, DateOnly to);
     /// <summary>FR-6a: the trip's tips are final, once 24 hours have passed since it ended.</summary>
     void MarkAllTipsIn(Guid tripId, DateTimeOffset at);
     /// <summary>FR-14, FR-16, FR-17, on the energy of the 30 days before the trip's shift (FR-9a).</summary>

@@ -81,6 +81,15 @@ public static class LedgerApi
             return Results.NoContent();
         });
 
+        api.MapPost("/trips/{id:guid}/cancel", (Guid id, CancelRequest request, ITripService trips) =>
+        {
+            trips.Cancel(id, request.Cancellation, request.Actuals, request.PromisedTip, request.Acknowledgement);
+            return Results.NoContent();
+        });
+
+        api.MapGet("/cancellations", (DateOnly from, DateOnly to, ITripService trips) =>
+            Results.Ok(trips.ReportCancels(from, to)));
+
         api.MapGet("/settings", (ISettingsService settings) => Results.Ok(settings.Get()));
 
         api.MapPost("/settings", (Settings request, ISettingsService settings) =>

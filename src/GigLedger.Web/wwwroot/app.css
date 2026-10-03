@@ -55,3 +55,6 @@ tr.trip-tip td { padding: .1rem .7rem .7rem; border-bottom: 1px solid #ddd; }
 .badge { font-size: .8rem; padding: .05rem .55rem; border-radius: 999px; border: 1px solid; }
 .badge.pending { color: #7a5200; border-color: #d9a400; background: #fff7e0; }
 .badge.all-in { color: #1b6e20; border-color: #7cc47f; background: #eef8ee; }
+.badge.cancelled { color: #6b2c2c; border-color: #c98a8a; background: #fbefef; }
+tr.trip-cancel td { padding: .3rem .7rem .8rem; border-bottom: 1px solid #ddd; background: #fafafa; }
+.form select { padding: .35rem .5rem; font-size: 1rem; }

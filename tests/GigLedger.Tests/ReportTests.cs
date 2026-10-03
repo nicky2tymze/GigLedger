@@ -27,6 +27,7 @@ public sealed class ReportTests : TestContext
         _connection.Open();
         _ledger = new LedgerServices(LedgerDatabase.Open(_connection), _clock);
         Services.AddSingleton<TimeProvider>(_clock);
+        Services.AddSingleton<ITripService>(_ledger);
         Services.AddSingleton<IEntryCheckService>(_ledger);
         Services.AddSingleton<IOfferService>(_ledger);
         Services.AddSingleton<IReportService>(_ledger);

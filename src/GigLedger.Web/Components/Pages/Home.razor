@@ -67,7 +67,25 @@ else
                     <td>@Display.Time(trip.AcceptedAt)</td>
                     <td>@Display.Money(trip.Offer.Pay.Value) <span class="grade">@trip.Offer.Pay.Grade</span></td>
                     <td>@Display.Miles(trip.Offer.StatedMiles.Value) stated</td>
-                    @if (trip.Actuals is { } a)
+                    @if (trip.Cancel is { } cancelled)
+                    {
+                        @* FR-3a: what happened, what it paid, and on a shopped cancel what was driven against the offer. *@
+                        <td colspan="5">
+                            <span class="badge cancelled">cancelled</span>
+                            by @CancelRules.Label(cancelled.Cancellation.By).ToLowerInvariant(), @CancelRules.Label(cancelled.Cancellation.Stage).ToLowerInvariant(),
+                            at @Display.Time(cancelled.Cancellation.At) · paid <strong>@Display.Money(cancelled.Paid)</strong>
+                            @if (cancelled.Cancellation.Reason is { } why)
+                            {
+                                <span> · @CancelRules.Label(why)@(cancelled.Cancellation.Note is { } note ? $": {note}" : "")</span>
+                            }
+                            @if (trip.Actuals is { } driven && reports[index].EstimateError is { } adjustment)
+                            {
+                                <span> · @driven.ElapsedMinutes.Value min, @Display.Miles(driven.RouteMiles.Value) out, @Display.Miles(driven.ReturnMiles.Value) back,
+                                    mileage adjustment @Display.Miles(adjustment.MilesOver)</span>
+                            }
+                        </td>
+                    }
+                    else if (trip.Actuals is { } a)
                     {
                         <td>@a.ElapsedMinutes.Value min</td>
                         <td>@Display.Miles(a.RouteMiles.Value) out, @Display.Miles(a.ReturnMiles.Value) back</td>
@@ -80,11 +98,63 @@ else
                         <td colspan="5" class="form">
                             <input id="@($"minutes-{index}")" type="number" placeholder="minutes" @bind="actuals[index].Minutes" />
                             <input id="@($"route-{index}")" type="number" step="0.1" placeholder="route mi" @bind="actuals[index].Route" />
-                            <input id="@($"return-{index}")" type="number" step="0.1" placeholder="return mi" @bind="actuals[index].Return" />
+                            <input id="@($"return-{index}")" type="number" step="0.1" placeholder="@(trip.Offer.Drops == 1 ? "return mi (= route)" : "return mi")" @bind="actuals[index].Return" />
                             <button id="@($"save-actuals-{index}")" @onclick="() => SaveActuals(index)">Save</button>
+                            <button id="@($"cancel-{index}")" @onclick="() => StartCancel(index)">Cancel</button>
                         </td>
                     }
                 </tr>
+                @if (cancelling == index)
+                {
+                    <tr class="trip-cancel">
+                        <td colspan="8">
+                            <div class="form">
+                                <label>Who cancelled
+                                    <select id="cancel-by" @bind="cancel.By">
+                                        @foreach (var by in Enum.GetValues<CancelledBy>())
+                                        {
+                                            <option value="@by">@CancelRules.Label(by)</option>
+                                        }
+                                    </select>
+                                </label>
+                                @if (cancel.By == nameof(CancelledBy.Driver))
+                                {
+                                    <label>Why
+                                        <select id="cancel-reason" @bind="cancel.Reason">
+                                            <option value="">choose</option>
+                                            @foreach (var reason in Enum.GetValues<CancelReason>())
+                                            {
+                                                <option value="@reason">@CancelRules.Label(reason)</option>
+                                            }
+                                        </select>
+                                    </label>
+                                }
+                                <label>When
+                                    <select id="cancel-stage" @bind="cancel.Stage">
+                                        @foreach (var stage in Enum.GetValues<CancelStage>())
+                                        {
+                                            <option value="@stage">@CancelRules.Label(stage)</option>
+                                        }
+                                    </select>
+                                </label>
+                                <label>Cancelled at <input id="cancel-at" type="datetime-local" @bind="cancel.At" /></label>
+                                <label>Note <input id="cancel-note" @bind="cancel.Note" /></label>
+                                @if (cancel.Stage != nameof(CancelStage.BeforePickup))
+                                {
+                                    <label>Minutes <input id="cancel-minutes" type="number" @bind="cancel.Minutes" /></label>
+                                    <label>Route mi (offer: @Display.Miles(trip.Offer.StatedMiles.Value)) <input id="cancel-route" type="number" step="0.1" @bind="cancel.Route" /></label>
+                                    <label>Return mi <input id="cancel-return" type="number" step="0.1" placeholder="@(trip.Offer.Drops == 1 ? "= route" : "")" @bind="cancel.Return" /></label>
+                                    @if (trip.Offer.PromisedTip is null)
+                                    {
+                                        <label>Tip from the offer ($) <input id="cancel-tip" type="number" step="0.01" @bind="cancel.Tip" /></label>
+                                    }
+                                }
+                                <button id="confirm-cancel" @onclick="ConfirmCancel">Confirm cancel</button>
+                                <button id="cancel-back" @onclick="() => cancelling = null">Back</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
                 @if (trip.Actuals is not null)
                 {
                     @* The trip's tip on a line of its own (FR-6, FR-6a): status, amounts, entry, then the final mark. *@
@@ -119,6 +189,8 @@ else
                                     <input id="@($"tip-{index}")" type="number" step="0.01" placeholder="tip posted" @bind="tips[index]" />
                                     <button id="@($"save-tip-{index}")" @onclick="() => SaveTip(index)">Save tip</button>
                                 </span>
+                                @if (trip.Cancel is null)
+                                {
                                 <span class="tip-entry">
                                     <input id="@($"promised-{index}")" type="number" step="0.01" placeholder="tip from the offer" @bind="promised[index].Amount" />
                                     @if (trip.Offer.PromisedTip is not null)
@@ -127,7 +199,8 @@ else
                                     }
                                     <button id="@($"set-promised-{index}")" @onclick="() => SetPromisedTip(index)">@(trip.Offer.PromisedTip is null ? "Add tip" : "Change tip")</button>
                                 </span>
-                                @if (trip.Tips is { Tracked: true, Pending: true })
+                                }
+                                @if (trip.Cancel is null && trip.Tips is { Tracked: true, Pending: true })
                                 {
                                     @if (Clock.GetUtcNow() >= trip.AllTipsInOpensAt)
                                     {
@@ -161,6 +234,19 @@ else
         public string? Reason { get; set; }
     }
 
+    private sealed class CancelInput
+    {
+        public string By { get; set; } = nameof(CancelledBy.Customer);
+        public string Stage { get; set; } = nameof(CancelStage.BeforePickup);
+        public string? Reason { get; set; }
+        public string? Note { get; set; }
+        public DateTime At { get; set; }
+        public int? Minutes { get; set; }
+        public decimal? Route { get; set; }
+        public decimal? Return { get; set; }
+        public decimal? Tip { get; set; }
+    }
+
     private sealed class ActualsInput
     {
         public int? Minutes { get; set; }
@@ -174,6 +260,8 @@ else
     private List<TripReport> reports = [];
     private List<decimal?> tips = [];
     private List<PromisedInput> promised = [];
+    private int? cancelling;
+    private CancelInput cancel = new();
     private Guid? closedShift;
     private string? error;
 
@@ -253,7 +341,8 @@ else
     private void SaveActuals(int index)
     {
         var input = actuals[index];
-        if (input.Minutes is null || input.Route is null || input.Return is null)
+        var back = ReturnOrDefault(trips[index], input.Route, input.Return);
+        if (input.Minutes is null || input.Route is null || back is null)
         {
             error = "Enter the minutes, the route miles, and the return miles.";
             return;
@@ -261,8 +350,46 @@ else
         var (trip, entered) = (trips[index].Id, new GradedActuals(
             new(input.Minutes.Value, Grade.Entered),
             new(input.Route.Value, Grade.Entered),
-            new(input.Return.Value, Grade.Entered)));
+            new(back.Value, Grade.Entered)));
         Attempt(ack => Trips.RecordActuals(trip, entered, ack));
+    }
+
+    /// <summary>FR-3: a one-drop trip's return defaults to its route when left blank.</summary>
+    private static decimal? ReturnOrDefault(StoredTrip trip, decimal? route, decimal? back) =>
+        back ?? (trip.Offer.Drops == 1 ? route : null);
+
+    private void StartCancel(int index)
+    {
+        error = null;
+        cancelling = index;
+        cancel = new CancelInput { At = Clock.GetLocalNow().DateTime, Route = trips[index].Offer.StatedMiles.Value };
+    }
+
+    // FR-3a: the service decides what a cancel needs; the page only gathers it.
+    private void ConfirmCancel()
+    {
+        if (cancelling is not { } index) return;
+        var trip = trips[index];
+        var by = Enum.Parse<CancelledBy>(cancel.By);
+        CancelReason? reason = by == CancelledBy.Driver && !string.IsNullOrEmpty(cancel.Reason) ? Enum.Parse<CancelReason>(cancel.Reason) : null;
+        var cancellation = new Cancellation(Local(cancel.At), by, Enum.Parse<CancelStage>(cancel.Stage), reason, cancel.Note);
+        GradedActuals? driven = null;
+        if (cancellation.Shopped)
+        {
+            var back = ReturnOrDefault(trip, cancel.Route, cancel.Return);
+            if (cancel.Minutes is null || cancel.Route is null || back is null)
+            {
+                error = "Enter the minutes, the route miles, and the return miles.";
+                return;
+            }
+            driven = new(new(cancel.Minutes.Value, Grade.Entered), new(cancel.Route.Value, Grade.Entered), new(back.Value, Grade.Entered));
+        }
+        var tip = cancel.Tip;
+        Attempt(ack =>
+        {
+            Trips.Cancel(trip.Id, cancellation, driven, tip, ack);
+            cancelling = null;
+        });
     }
 
     // FR-6a: add the offer's tip after accept, or change it; the service decides when a reason is needed.

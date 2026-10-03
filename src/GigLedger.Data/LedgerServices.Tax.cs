@@ -107,11 +107,14 @@ public sealed partial class LedgerServices : ITaxService
         foreach (var t in trips)
         {
             // The current promised tip: one set after accept wins over the one stored at accept.
-            var promised = ToStored(t).Offer.PromisedTip?.Value;
-            var tracked = promised is not null && allIn.Contains(t.Id);
+            var stored = ToStored(t);
+            var promised = stored.Offer.PromisedTip?.Value;
+            // SDD 6.12: a cancel counts what it paid, and its posted tips on their own (that pay excludes the tip).
+            var tracked = stored.Cancel is not null || (promised is not null && allIn.Contains(t.Id));
             if (t.AcceptedAt.DateTime.Year == year)
             {
-                months[t.AcceptedAt.DateTime.Month - 1] += tracked ? t.Pay - promised!.Value : t.Pay;
+                months[t.AcceptedAt.DateTime.Month - 1] += stored.Cancel is { } cancel ? cancel.Paid
+                    : tracked ? t.Pay - promised!.Value : t.Pay;
                 any = true;
             }
             if (!tracked) continue;

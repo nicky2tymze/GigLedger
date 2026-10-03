@@ -60,6 +60,18 @@ public sealed class PromisedTipRow : LedgerRecord
     public Grade AmountGrade { get; set; }
 }
 
+/// <summary>FR-3a: a trip that ended cancelled, and what it paid.</summary>
+public sealed class CancelRow : LedgerRecord
+{
+    public Guid TripId { get; set; }
+    public DateTimeOffset At { get; set; }
+    public CancelledBy By { get; set; }
+    public CancelStage Stage { get; set; }
+    public CancelReason? Reason { get; set; }
+    public string? Note { get; set; }
+    public decimal Paid { get; set; }
+}
+
 /// <summary>FR-6a: the moment a trip's tips were marked final.</summary>
 public sealed class TipsInRow : LedgerRecord
 {
