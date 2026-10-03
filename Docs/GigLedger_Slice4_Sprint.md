@@ -1,6 +1,6 @@
 # GigLedger Slice 4: what the road actually does
 
-**Type:** Regular Sprint · **Opened:** 2026-10-02 · **Status:** OPEN
+**Type:** Regular Sprint · **Opened:** 2026-10-02 · **Status:** CLOSED 2026-10-03
 
 Raised during a walkthrough with a working Spark driver, who will test it.
 
@@ -83,6 +83,34 @@ is open. Start a shift to accept an offer."* (`OfferPage.razor`).
 
 At close: what this slice did badly.
 
+Written at close, 2026-10-03:
+
+**What landed.** Declines with reasons; accept starting a shift; entry checks at three levels with an
+explained-values report; pay as the total shown, with optional tip tracking that can be edited after
+accept; cancelled trips; a one-drop trip's return defaulting to its route. Suite 263 to 425, every new test
+written first and seen failing, every test that passed early broken on purpose to prove it could fail.
+
+**What the slice did badly.**
+- **The biggest defect was in the requirements, not the code.** SRS 0.2 said a tip is added to pay; the
+  driver enters pay as the total shown, tip included. Every tip would have counted twice. It surfaced only
+  because a question about the accept screen got asked; nothing checked the SRS against how data is
+  actually entered. GigLedger is not yet his live record, so no stored data was affected.
+- **Built from the story text, then dropped.** The tip-tracking on/off setting came from the story's word
+  "opt-in"; the driver never asked for it, and it was removed in the same story (its column stays). Ask
+  what a setting is for before building one.
+- **Every live check found something the tests could not:** a scare from launching the app in production
+  mode (the error bar shows permanently); the Items box starting at 0; an 8,000-minute trip passing every
+  check; the tip display jammed into the trip row. The live check is part of done, not a courtesy.
+- **Existing tests had encoded the very errors story 2 now stops** (243 kWh for 24.3, 5 minutes for 55),
+  and seven encoded the double-counting tip rule. Tests prove the rule they were written from, right or
+  wrong.
+- **Process:** one commit (removing cash tips) was pushed without asking, and the removal was itself a
+  misreading, corrected in the next commit; a test helper started a second shift; long shell scripts
+  failed to parse twice, costing calls the driver reads as noise.
+
+**What worked.** Tests first with planted violations; the Architect's answers recorded in his words as
+they came; scope cut on his word (cash tips: not now, with his reason on record).
+
 ## Log
 
 - 2026-10-02: Opened on the Architect's word, four stories.
@@ -148,3 +176,6 @@ At close: what this slice did badly.
   miles are their own field; a cancel is final. Also his: a one-drop trip's return always defaults to its
   route (FR-3). SRS 0.10, SDD 0.11 section 6.12. 25 tests written first: 23 failed, the 2 that passed early
   were shown failing on planted violations (one test helper bug fixed: it started a second shift). Suite 425.
+- 2026-10-03: **Story 4 ACCEPTED (the Architect)** after a live check: a shopped driver cancel paid $26.89 with
+  the tip given at cancel; a store cancel before pickup paid $0; a two-drop trip asked for its return.
+  **SLICE 4 CLOSED** on his word, retro written.
