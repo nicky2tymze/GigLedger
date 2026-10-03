@@ -43,3 +43,6 @@ public sealed record ActualsRequest(Graded<int> ElapsedMinutes, Graded<decimal> 
 {
     public GradedActuals Actuals => new(ElapsedMinutes, RouteMiles, ReturnMiles);
 }
+
+/// <summary>FR-6a: the moment all of a trip's tips are in.</summary>
+public sealed record TipsInRequest(DateTimeOffset At);

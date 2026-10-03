@@ -153,10 +153,11 @@ public sealed class EnergyPageTests : TestContext
 
     // ---- Shift page: tips and per-trip rates ----
 
-    private Guid FinishedTrip()
+    private Guid FinishedTrip(decimal? promisedTip = null)
     {
         var shift = Shifts.Start("Spark", Now, new(17_000m, Grade.Measured));
-        var trip = _ledger.Accept(shift, new Offer(new(34.89m, Grade.Stated), new(6.6m, Grade.Stated), 2, 32, new(58, Grade.Stated), Now), Now);
+        var trip = _ledger.Accept(shift, new Offer(new(34.89m, Grade.Stated), new(6.6m, Grade.Stated), 2, 32, new(58, Grade.Stated), Now,
+            PromisedTip: promisedTip is { } p ? new Graded<decimal>(p, Grade.Stated) : null), Now);
         Trips.RecordActuals(trip, new(new(55, Grade.Entered), new(6.4m, Grade.Entered), new(5.7m, Grade.Entered)));
         return trip;
     }
@@ -185,8 +186,10 @@ public sealed class EnergyPageTests : TestContext
     [Fact]
     public void UI_Summary_ShowsTips()
     {
-        var trip = FinishedTrip();
+        // SRS 0.8: tips counted in gross, which on a tracked trip with all tips in are the posted ones.
+        var trip = FinishedTrip(promisedTip: 6.00m);
         Trips.RecordTip(trip, 6.00m, Now.AddHours(12));
+        Trips.MarkAllTipsIn(trip, Now.AddDays(2));
         var shift = Trips.Get(trip).ShiftId;
         Shifts.End(shift, Now.AddMinutes(90), new(17_012.1m, Grade.Measured));
 

@@ -1,7 +1,8 @@
 namespace GigLedger.Core;
 
 /// <summary>The settings in force (SDD 4.1). Stored as versions; the newest one applies.</summary>
-public sealed record Settings(decimal AcceptThreshold, decimal DefaultMilesPerKwh, decimal DefaultPricePerKwh)
+/// <param name="TrackTips">FR-6a: the screens ask for the promised tip and offer "all tips in".</param>
+public sealed record Settings(decimal AcceptThreshold, decimal DefaultMilesPerKwh, decimal DefaultPricePerKwh, bool TrackTips = false)
 {
     /// <summary>Confirmed 2026-09-25 (SDD section 11).</summary>
     public static Settings Initial { get; } = new(25.00m, 4.0m, 0.69m);
@@ -10,8 +11,18 @@ public sealed record Settings(decimal AcceptThreshold, decimal DefaultMilesPerKw
 /// <summary>An offer's forecast and the accept rule's answer (FR-11, FR-12).</summary>
 public sealed record OfferEvaluation(Result Forecast, Verdict Verdict, decimal Threshold);
 
-/// <summary>A stored trip: the offer as accepted, its actuals once recorded, and its tip once posted.</summary>
-public sealed record StoredTrip(Guid Id, Guid ShiftId, Offer Offer, DateTimeOffset AcceptedAt, GradedActuals? Actuals, Graded<decimal>? Tip = null);
+/// <summary>
+/// A stored trip: the offer as accepted, its actuals once recorded, the sum of its posted tips (null when
+/// none has posted), and whether all its tips are in (FR-6, FR-6a).
+/// </summary>
+public sealed record StoredTrip(Guid Id, Guid ShiftId, Offer Offer, DateTimeOffset AcceptedAt, GradedActuals? Actuals, Graded<decimal>? Tip = null, bool AllTipsIn = false)
+{
+    /// <summary>Base, the tip counted in gross, pending or not, and the adjustment (SDD 6.11).</summary>
+    public TipState Tips => TipAccounting.State(Offer.Pay.Value, Offer.PromisedTip?.Value, Tip?.Value ?? 0m, AllTipsIn);
+
+    /// <summary>When "all tips in" can first be marked.</summary>
+    public DateTimeOffset AllTipsInOpensAt => TipAccounting.AllTipsInOpensAt(AcceptedAt, Actuals?.ElapsedMinutes.Value);
+}
 
 /// <summary>A trip with everything computed about it (FR-14, FR-16, FR-17). Rates and error need actuals.</summary>
 public sealed record TripReport(StoredTrip Trip, TripRates? Rates, EstimateError? EstimateError, EnergyBasis Energy);
@@ -83,8 +94,10 @@ public interface ITripService
     StoredTrip Get(Guid tripId);
     /// <summary>Every trip accepted on the shift, in the order accepted.</summary>
     IReadOnlyList<StoredTrip> OnShift(Guid shiftId);
-    /// <summary>FR-6: one tip per trip, the whole trip's tip.</summary>
+    /// <summary>FR-6: a posted tip; a trip can have several, summed. Never added on top of pay.</summary>
     void RecordTip(Guid tripId, decimal amount, DateTimeOffset postedAt, Acknowledgement? acknowledgement = null);
+    /// <summary>FR-6a: the trip's tips are final, once 24 hours have passed since it ended.</summary>
+    void MarkAllTipsIn(Guid tripId, DateTimeOffset at);
     /// <summary>FR-14, FR-16, FR-17, on the energy of the 30 days before the trip's shift (FR-9a).</summary>
     TripReport Report(Guid tripId);
 }

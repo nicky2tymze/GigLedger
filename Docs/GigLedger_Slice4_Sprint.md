@@ -21,7 +21,7 @@ it is worked in.
 |---|---|---|
 | 1 | **Decline an offer, with reasons.** An evaluated offer can be declined. The decline is stored with the offer's numbers, one or more reasons from a fixed list, an optional note, and the time. Never deleted. | SRS requirement added; tests first; the Offer page has a Decline action; declines appear in a report by reason. |
 | 2 | **Implausible values.** Two levels. *Impossible* values are refused with a sentence saying why (for example: implied speed over a set limit, one charge larger than the battery, a start time in the future, a shift over 24 hours). *Implausible* values are allowed only after the driver confirms, and the record is marked confirmed. | SRS requirement with the limits stated as data, not code; tests for each limit; the screens show the refusal or the confirm step. |
-| 3 | **Tip adjustments, opt-in.** Off by default. When on: the tip the offer promised is recorded at accept (the total across all drops); tips that post are recorded per posting, per drop where the platform gives it; the trip shows *tip pending* until complete; the adjustment (promised against posted) is computed only once complete. With it off, behaviour is today's FR-6. | SRS requirement extending FR-6; tests for single-drop, multi-drop, partial posting, later change; a setting to turn it on; a report of adjustments. |
+| 3 | **Tip tracking, optional (rescoped 2026-10-03).** Pay is the total shown at accept, tip included; a recorded tip is never added on top (reverses 0.2). Setting, off by default: the promised tip at accept, posted tips summed against the trip (no per-order breakdown), *tip pending* until the driver marks *all tips in*, then gross = base + posted and the adjustment is shown. | SRS requirement; tests first; a setting; the accept field and the all-tips-in action on screen. |
 | 4 | **Cancelled trips.** A trip can end cancelled: who cancelled (customer, store, platform, driver), when (before pickup, after pickup, at the door), what it paid (full, partial, none), **why, from a fixed list of reasons plus an optional note** (added by the Architect 2026-10-03), and the miles and minutes actually driven, including any return to the store. Those still count against the shift. | SRS requirement; tests; a Cancel action on an open trip; the shift summary includes cancelled trips' cost; a cancellation report. |
 
 ## Open questions
@@ -117,3 +117,16 @@ At close: what this slice did badly.
   $1,000 tip each went through the explanation step and were marked; nothing stored without one. Found in
   the check: a trip of 8,000 minutes passed, since over 1,200 miles that is only 9 mph and no limit covered
   trip time. His call: refuse a trip over 24 hours (FR-37). Test first, seen failing.
+- 2026-10-03: **Story 3 rescoped (the Architect).** The accept screen shows one total; the tip is visible
+  by opening the offer; he enters the total as pay. So a recorded tip added on top would count twice
+  (GigLedger is not yet his live record, so no stored data is affected). His aim: tips tracked for tax,
+  not who tipped. Dropped: tips per order, the zero-tip-order count. Kept optional, off by default.
+- 2026-10-03: **Story 3 built, awaiting the live check and acceptance.** His answers: late tips accepted and
+  recomputed; a customer can change a tip for 24 hours, so *all tips in* is hidden until 24 hours after the
+  trip ended; a lowered tip just posts smaller (negative tips stay refused). SRS 0.8 (FR-1, FR-6 reversed,
+  FR-6a, FR-17, FR-31, FR-36), SDD 0.9 section 6.11. 31 tests written first: 29 failed, the 2 that passed
+  early were shown failing on planted violations. Seven existing tests asserted the reversed rule (a tip
+  added on top of pay, one tip per trip, tips counted on their own when untracked); each was converted to
+  the new rule, keeping its purpose (the ones about tips being counted now use a tracked trip with all
+  tips in). EF generated an UPDATE on the seeded settings row; the append-only triggers refuse it, so it
+  was removed by hand, as in RecordKeeping. Suite 388 passed.

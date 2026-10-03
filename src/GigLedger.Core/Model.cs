@@ -1,7 +1,9 @@
 namespace GigLedger.Core;
 
 /// <summary>An offer as the platform presents it (FR-1).</summary>
+/// <param name="Pay">The total the platform shows at the accept screen, tip included (FR-1).</param>
 /// <param name="ReturnMilesOverride">The driver's own return estimate; null means use the stated miles (FR-13).</param>
+/// <param name="PromisedTip">The tip inside the pay, read from the opened offer; null means untracked (FR-6a).</param>
 public sealed record Offer(
     Graded<decimal> Pay,
     Graded<decimal> StatedMiles,
@@ -9,7 +11,8 @@ public sealed record Offer(
     int Items,
     Graded<int> EstimatedMinutes,
     DateTimeOffset OfferedAt,
-    decimal? ReturnMilesOverride = null);
+    decimal? ReturnMilesOverride = null,
+    Graded<decimal>? PromisedTip = null);
 
 /// <summary>What actually happened on an accepted trip (FR-3).</summary>
 public sealed record TripActuals(int ElapsedMinutes, decimal RouteMiles, decimal ReturnMiles);

@@ -69,6 +69,20 @@ public static class LedgerApi
             return Results.NoContent();
         });
 
+        api.MapPost("/trips/{id:guid}/tips-in", (Guid id, TipsInRequest request, ITripService trips) =>
+        {
+            trips.MarkAllTipsIn(id, request.At);
+            return Results.NoContent();
+        });
+
+        api.MapGet("/settings", (ISettingsService settings) => Results.Ok(settings.Get()));
+
+        api.MapPost("/settings", (Settings request, ISettingsService settings) =>
+        {
+            settings.Set(request);
+            return Results.NoContent();
+        });
+
         api.MapGet("/trips/{id:guid}/report", (Guid id, ITripService trips) =>
             Results.Ok(trips.Report(id)));
 

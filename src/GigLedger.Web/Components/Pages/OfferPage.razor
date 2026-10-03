@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @inject HeldOffer Held
 @inject IEntryCheckService Checks
+@inject ISettingsService Settings
 
 <PageTitle>Offer · GigLedger</PageTitle>
 
@@ -18,6 +19,10 @@
     <label>Items <input id="items" type="number" @bind="items" /></label>
     <label>Their estimate (min) <input id="est-minutes" type="number" @bind="estMinutes" /></label>
     <label>Return miles, if not the same as stated <input id="return-override" type="number" step="0.1" @bind="returnOverride" /></label>
+    @if (trackTips)
+    {
+        <label>Promised tip ($), open the offer to see it <input id="promised-tip" type="number" step="0.01" @bind="promisedTip" /></label>
+    }
     <button id="evaluate" @onclick="Evaluate">Evaluate</button>
 </div>
 
@@ -80,7 +85,8 @@
 }
 
 @code {
-    private decimal? pay, statedMiles, returnOverride;
+    private decimal? pay, statedMiles, returnOverride, promisedTip;
+    private bool trackTips;
     private int drops = 1;
     private int? items, estMinutes;
 
@@ -97,7 +103,11 @@
     private NeedsAcknowledgementException? pending;
     private Action<Acknowledgement?>? retry;
 
-    protected override void OnInitialized() => open = Shifts.Open();
+    protected override void OnInitialized()
+    {
+        open = Shifts.Open();
+        trackTips = Settings.Get().TrackTips;
+    }
 
     private void Evaluate()
     {
@@ -117,7 +127,8 @@
                 items.Value,
                 new(estMinutes.Value, Grade.Stated),
                 Clock.GetLocalNow(),
-                returnOverride);
+                returnOverride,
+                promisedTip is { } tip ? new Graded<decimal>(tip, Grade.Stated) : null);
             evaluation = Offers.Evaluate(offer);
         }
         catch (Exception e) when (Refusal.IsRefusal(e))

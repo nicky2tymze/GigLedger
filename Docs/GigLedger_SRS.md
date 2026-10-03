@@ -1,6 +1,6 @@
 # GigLedger: Software Requirements Specification
 
-**Version:** 0.7 · 2026-10-03 · DRAFT, for review. 0.7 adds entry checks (section 5.9, FR-35 to FR-38): values past a limit are confirmed or explained, never silently stored, and values that cannot be true are refused. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
+**Version:** 0.8 · 2026-10-03 · DRAFT, for review. 0.8 makes an offer's pay the total the platform shows, tip included, and **reverses 0.2's tip rule** (FR-6): a recorded tip is never added on top of that total; optional tip tracking (FR-6a) records the promised tip and what posts. 0.7 adds entry checks (section 5.9, FR-35 to FR-38): values past a limit are confirmed or explained, never silently stored, and values that cannot be true are refused. 0.6 records declined offers with their reasons (FR-2a, FR-21a), **reversing 0.2's "no declined offers"** (see FR-2), and lets accept start a shift (FR-2b). 0.5 allows a charge session's odometer, state of charge, and purpose to be unknown, since a charging receipt carries none of them, specifies the receipt import (FR-22) and the payout import (FR-23), and makes imported payouts the record for reconciliation where they exist (FR-31). 0.4 settles four Slice 3 decisions: a place and purpose on every drive, shift spans logged as business, a reason on every correction, receipts stored in the database. 0.3 added the odometer to a charge session, fixes the efficiency method and the energy window, and sets a placeholder home rate. 0.2 closed the four open questions: tips per trip, no declined offers, home and fast charging separated, vehicle not shared.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor · EF Core + SQLite · xUnit
 
@@ -20,8 +20,9 @@ the driver needs to decide:
   days it ran 43% to 50% of a run's miles.
 - **Pay is gross.** Fast charging consumed about 22% of driving gross over two independent windows
   that agreed within about 2%.
-- **Tips post later.** Tips were about half of trip earnings, arrive hours after the trip, and
-  appear nowhere at the accept screen.
+- **Tips post later.** Tips were about half of trip earnings and arrive hours after the trip. The
+  accept screen shows one total with the tip inside it, visible only by opening the offer, and what
+  posts later can differ from what was promised.
 
 GigLedger turns each of those into a measured number and applies the driver's own accept rule to
 each offer.
@@ -63,7 +64,8 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 ### 5.1 Capture
 
 - **FR-1** Record an offer with pay, stated miles, drops, items, the platform's time estimate, and
-  the time it was offered.
+  the time it was offered. **Pay is the total the platform shows at the accept screen, tip
+  included** (0.8; it is what the driver enters and decides on).
 - **FR-2** Record the time an offer was accepted. The forecast in 5.3 can be run on any offer before
   deciding; an offer that is only evaluated, neither accepted nor declined, is not kept.
   **Reversal (0.6):** 0.2 decided that declined offers are not recorded. That left every decline with
@@ -91,10 +93,22 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
   `derived`. Until the rate is read from a bill, a **placeholder of $0.15/kWh** is used, and every
   number that depends on it says so (NFR-2). **The odometer, the state of charge, and the
   purpose may be unknown** (a receipt carries none of them). Unknown is recorded as unknown, never as zero or a guess.
-- **FR-6** Record a payout: amount, date posted, and which trip or trips it covers. A **tip**
-  belongs to exactly one trip, and its amount is the total for the whole trip. On a trip with two
-  or more drops the platform does not break the tip out by drop, so GigLedger records no per-drop
-  tip and computes nothing that would require one.
+- **FR-6** Record a posted tip against its trip: amount and date posted. A trip can have **one or more**
+  posted tips (the platform may post a trip's tip in pieces); they are summed, with no breakdown by
+  order or drop. **A posted tip is never added on top of the trip's pay**, since pay already includes
+  the tip (FR-1); without tip tracking (FR-6a) it is kept as a record only.
+  **Reversal (0.8):** 0.2 decided one tip per trip, added to pay. Measured against how pay is entered,
+  that counts every tip twice. The tip lives inside the pay.
+- **FR-6a Tip tracking (optional, off by default).** A setting. When on, the driver enters the
+  **promised tip** at accept, read from the opened offer; it cannot exceed the pay. The trip's
+  **base** is pay minus the promised tip. The trip shows **tip pending** until the driver marks it
+  **all tips in**; until then its gross is the pay. Once marked, its gross is the base plus the
+  posted tips, and the **adjustment** (posted minus promised) is shown. A trip accepted without a
+  promised tip is untracked: its gross is its pay, whatever posts. **The platform lets a customer
+  change a tip for 24 hours after delivery**, so *all tips in* is offered only once 24 hours have
+  passed since the trip ended (its accept time plus its actual minutes). **A tip that posts after
+  *all tips in* is accepted**, and the gross and the adjustment are recomputed (the Architect,
+  2026-10-03).
 - **FR-7** Every stored number carries its grade (section 3). A value entered by the driver is
   never displayed as measured.
 
@@ -131,7 +145,8 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 - **FR-15** Compute the **deadhead share**: return miles over total miles for the trip.
 - **FR-16** Compare the platform's time estimate to actual time, and stated miles to actual
   miles, and report the error of each.
-- **FR-17** Once a tip posts, recompute the trip's rates and keep the pre-tip figures visible.
+- **FR-17** A trip's rates use its gross (FR-6a). On a tracked trip the rates on its base are shown
+  beside them; once all tips are in, the rates use the base plus the posted tips.
 
 ### 5.5 Per shift
 
@@ -193,8 +208,9 @@ GigLedger shows the forecast and the rule's verdict. The driver decides.
 - **FR-31 Platform reconciliation.** Total recorded payouts per platform per year can be compared
   against the platform's annual tax form (1099-K or 1099-NEC), and any difference is listed by
   month. **Which record:** where the platform's own payouts are imported for the year (FR-23),
-  they are the record, counted in the month of the transaction; otherwise the trips and tips
-  logged in GigLedger are. The two are never added together, since the export already contains
+  they are the record, counted in the month of the transaction; otherwise the trips logged in
+  GigLedger are: a trip's gross in the month it was accepted, except that on a tracked trip with all
+  tips in, the base counts in the month accepted and each posted tip in the month it posted. The two are never added together, since the export already contains
   every logged trip. The reconciliation, and the gross in the tax summary (FR-29), name the source
   they used.
 - **FR-32 Full export.** The entire ledger, including attachments, exports to an open format
@@ -228,7 +244,7 @@ threshold requires documentation to be used."*
   | Pay per trip (base, before tip) | an offer is accepted or declined | $80 | $250 |
   | Speed: (route + return miles) over elapsed time | a trip's actuals are entered | 60 mph | 90 mph |
   | Trip length: route + return miles | a trip's actuals are entered | 50 mi | 150 mi |
-  | Tip per trip | a tip is recorded | $40 | $150 |
+  | Tip: the promised tip, and each posted tip | an offer is accepted; a tip is recorded | $40 | $150 |
   | Shift length | a shift ends | 12 h | 16 h |
 
   The offer's stated miles and time estimate are not checked: they feed only the forecast, never the

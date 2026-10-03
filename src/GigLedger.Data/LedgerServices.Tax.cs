@@ -81,8 +81,8 @@ public sealed partial class LedgerServices : ITaxService
 
     /// <summary>
     /// SDD 6.6: a platform's payments in a year by month, from one source. The imported payouts
-    /// where any exist for the year, by transaction month; otherwise trip pay by the month
-    /// accepted and tips by the month posted. Never both: the export already holds every logged trip.
+    /// where any exist for the year, by transaction month; otherwise the logged trips (SRS 0.8 FR-31).
+    /// Never both: the export already holds every logged trip.
     /// </summary>
     private (decimal[] Months, PaymentSource Source, bool Any) Payments(int year, string platform)
     {
@@ -99,14 +99,27 @@ public sealed partial class LedgerServices : ITaxService
 
         var shifts = db.Shifts.AsNoTracking().Where(s => s.Platform == platform).Select(s => s.Id).ToHashSet();
         var trips = db.Trips.AsNoTracking().AsEnumerable().Where(t => shifts.Contains(t.ShiftId)).ToList();
-        foreach (var t in trips.Where(t => t.AcceptedAt.DateTime.Year == year))
-            months[t.AcceptedAt.DateTime.Month - 1] += t.Pay;
-        var tripIds = trips.Select(t => t.Id).ToHashSet();
-        var tips = db.Tips.AsNoTracking().AsEnumerable().Where(t => tripIds.Contains(t.TripId) && t.PostedAt.DateTime.Year == year).ToList();
-        foreach (var tip in tips)
-            months[tip.PostedAt.DateTime.Month - 1] += tip.Amount;
-        // A tip that posts in January for a December trip is still that year's income.
-        var any = tips.Count > 0 || trips.Any(t => t.AcceptedAt.DateTime.Year == year);
+        // SRS 0.8 FR-31: a trip's gross in the month accepted; on a tracked trip with all tips in, its base
+        // in the month accepted and each posted tip in the month it posted. A posted tip on an untracked or
+        // pending trip is inside the pay already, so it adds nothing.
+        var allIn = db.TipsIn.AsNoTracking().Select(x => x.TripId).ToHashSet();
+        var any = false;
+        foreach (var t in trips)
+        {
+            var tracked = t.PromisedTip is not null && allIn.Contains(t.Id);
+            if (t.AcceptedAt.DateTime.Year == year)
+            {
+                months[t.AcceptedAt.DateTime.Month - 1] += tracked ? t.Pay - t.PromisedTip!.Value : t.Pay;
+                any = true;
+            }
+            if (!tracked) continue;
+            // A tip that posts in January for a December trip is still that year's income.
+            foreach (var tip in db.Tips.AsNoTracking().Where(x => x.TripId == t.Id).AsEnumerable().Where(x => x.PostedAt.DateTime.Year == year))
+            {
+                months[tip.PostedAt.DateTime.Month - 1] += tip.Amount;
+                any = true;
+            }
+        }
         return (months, PaymentSource.LoggedTrips, any);
     }
 

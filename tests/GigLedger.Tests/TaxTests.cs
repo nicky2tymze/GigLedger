@@ -166,11 +166,13 @@ public sealed class TaxTests : TestContext
     {
         // The clock must be past the shift, or its start is refused as in the future (FR-37).
         _clock.Now = new(2026, 10, 2, 8, 0, 0, TimeSpan.FromHours(-5));
+        // SRS 0.8: an untracked trip's pay already holds its tip, so it all counts in the month accepted;
+        // the tracked case (base in September, the tip in October) is TipTrackingStorageTests.
         var trip = SparkTrip(new(2026, 9, 30, 20, 0, 0, TimeSpan.FromHours(-5)), 34.89m);
         ((ITripService)_ledger).RecordTip(trip, 6.00m, new(2026, 10, 1, 8, 0, 0, TimeSpan.FromHours(-5)));
         var months = Taxes.RecordedByMonth(2026, "Spark");
         Assert.Equal(34.89m, months[8]); // September
-        Assert.Equal(6.00m, months[9]);  // October
+        Assert.Equal(0m, months[9]);     // October: the tip is inside September's pay
     }
 
     [Fact]

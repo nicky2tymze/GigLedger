@@ -1,0 +1,30 @@
+@page "/settings"
+@inject ISettingsService Settings
+
+<PageTitle>Settings · GigLedger</PageTitle>
+
+<h1>Settings</h1>
+
+<section>
+    <label>
+        <input id="track-tips" type="checkbox" checked="@trackTips" @onchange="e => SetTrackTips(e.Value is true)" />
+        Track tips
+    </label>
+    <p class="hint">
+        On: the Offer page asks for the promised tip (open the offer to see it), and each trip shows its tip as
+        pending until you mark all tips in, 24 hours after the trip. Off: the pay you enter is the trip's gross,
+        and tips you record are kept as a record only (SRS FR-6, FR-6a).
+    </p>
+</section>
+
+@code {
+    private bool trackTips;
+
+    protected override void OnInitialized() => trackTips = Settings.Get().TrackTips;
+
+    private void SetTrackTips(bool on)
+    {
+        Settings.Set(Settings.Get() with { TrackTips = on });
+        trackTips = on;
+    }
+}

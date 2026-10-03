@@ -217,17 +217,18 @@ public sealed class ApiTests : IDisposable
     }
 
     [Fact]
-    public async Task FR33_ATipOnceThenConflict()
+    public async Task FR33_TipsPostInPiecesAndAreNeverAddedOnTopOfPay()
     {
+        // SRS 0.8 reversed "one tip per trip, added to pay".
         var trip = await AcceptRun4(await StartShift());
         await _http.PostAsJsonAsync($"/api/trips/{trip}/actuals", Run4Actuals, Json);
         var tip = new TipRequest(6.00m, T0.AddHours(12));
         Assert.Equal(HttpStatusCode.NoContent, (await _http.PostAsJsonAsync($"/api/trips/{trip}/tip", tip, Json)).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await _http.PostAsJsonAsync($"/api/trips/{trip}/tip", tip, Json)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _http.PostAsJsonAsync($"/api/trips/{trip}/tip", tip, Json)).StatusCode);
 
         var report = await _http.GetFromJsonAsync<TripReport>($"/api/trips/{trip}/report", Json);
-        Assert.Equal(6.00m, report!.Trip.Tip!.Value.Value);
-        Assert.True(report.Rates!.GrossPerHour.Value > report.Rates.GrossPerHourBeforeTip.Value);
+        Assert.Equal(12.00m, report!.Trip.Tip!.Value.Value);
+        Assert.Equal(report.Rates!.GrossPerHourBeforeTip.Value, report.Rates.GrossPerHour.Value);
     }
 
     [Fact]

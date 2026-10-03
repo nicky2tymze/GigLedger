@@ -130,10 +130,22 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         FindTrip(tripId);
         if (amount < 0)
             throw new ArgumentOutOfRangeException(nameof(amount), amount, "A tip cannot be negative.");
-        if (FindTip(tripId) is not null)
-            throw new InvalidOperationException($"Trip {tripId} already has its tip; a tip is the whole trip's tip.");
         CheckAndMark(MarkedRecord.Tip, tripId, acknowledgement, (EntryLimit.Tip, amount));
         db.Tips.Add(new TipRow { RecordedAt = clock.GetUtcNow(), TripId = tripId, Amount = amount, AmountGrade = Grade.Stated, PostedAt = postedAt });
+        db.SaveChanges();
+    }
+
+    public void MarkAllTipsIn(Guid tripId, DateTimeOffset at)
+    {
+        var trip = ToStored(FindTrip(tripId));
+        if (trip.Offer.PromisedTip is null)
+            throw new InvalidOperationException($"Trip {tripId} has no promised tip, so its tips are not tracked.");
+        if (trip.AllTipsIn)
+            throw new InvalidOperationException($"Trip {tripId} is already marked all tips in.");
+        if (at < trip.AllTipsInOpensAt)
+            throw new InvalidOperationException(
+                $"The customer can still change the tip until {trip.AllTipsInOpensAt:yyyy-MM-dd HH:mm}, 24 hours after the trip ended.");
+        db.TipsIn.Add(new TipsInRow { RecordedAt = clock.GetUtcNow(), TripId = tripId, At = at });
         db.SaveChanges();
     }
 
@@ -145,7 +157,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             return new TripReport(trip, null, null, energy);
         return new TripReport(
             trip,
-            EnergyCalculations.TripRates(trip.Offer.Pay.Value, trip.Tip?.Value ?? 0m, actuals.Values, energy),
+            EnergyCalculations.TripRates(trip.Tips.Base, trip.Tips.Counted, actuals.Values, energy),
             EnergyCalculations.EstimateError(trip.Offer, actuals.Values),
             energy);
     }
@@ -157,7 +169,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         // The version nothing supersedes, not the latest timestamp: two in one instant would tie.
         var current = Current(db.Settings.AsNoTracking()).SingleOrDefault()
             ?? throw new InvalidOperationException("No settings are stored; the schema seed is missing.");
-        return new Settings(current.AcceptThreshold, current.DefaultMilesPerKwh, current.DefaultPricePerKwh);
+        return new Settings(current.AcceptThreshold, current.DefaultMilesPerKwh, current.DefaultPricePerKwh, current.TrackTips);
     }
 
     public void Set(Settings settings)
@@ -169,6 +181,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             AcceptThreshold = settings.AcceptThreshold,
             DefaultMilesPerKwh = settings.DefaultMilesPerKwh,
             DefaultPricePerKwh = settings.DefaultPricePerKwh,
+            TrackTips = settings.TrackTips,
         });
         db.SaveChanges();
     }
@@ -188,6 +201,10 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         if (FindClose(shiftId) is not null)
             throw new InvalidOperationException($"Shift {shiftId} is closed.");
         EntryChecks.RefuseNegative(offer.Pay.Value, "Pay");
+        if (offer.PromisedTip is { } declinedPromise)
+            TipAccounting.RefuseImpossiblePromise(offer.Pay.Value, declinedPromise.Value);
+        if (offer.PromisedTip is { } promised)
+            TipAccounting.RefuseImpossiblePromise(offer.Pay.Value, promised.Value);
 
         var row = new TripRow
         {
@@ -201,8 +218,9 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             OfferedAt = offer.OfferedAt,
             ReturnMilesOverride = offer.ReturnMilesOverride,
             AcceptedAt = acceptedAt,
+            PromisedTip = offer.PromisedTip?.Value, PromisedTipGrade = offer.PromisedTip?.Grade,
         };
-        CheckAndMark(MarkedRecord.Trip, row.Id, acknowledgement, (EntryLimit.Pay, offer.Pay.Value));
+        CheckAndMark(MarkedRecord.Trip, row.Id, acknowledgement, OfferChecks(offer));
         db.Trips.Add(row);
         db.SaveChanges();
         return row.Id;
@@ -231,6 +249,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             EstimatedMinutes = offer.EstimatedMinutes.Value, EstimatedMinutesGrade = offer.EstimatedMinutes.Grade,
             OfferedAt = offer.OfferedAt,
             ReturnMilesOverride = offer.ReturnMilesOverride,
+            PromisedTip = offer.PromisedTip?.Value, PromisedTipGrade = offer.PromisedTip?.Grade,
             DeclinedAt = declinedAt,
             ForecastNetPerHour = evaluation.Forecast.Value,
             ForecastAssumptions = string.Join("\n", evaluation.Forecast.Assumptions.Select(a => $"{a.Input}: {a.Source}")),
@@ -239,7 +258,7 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             Reasons = string.Join(",", ordered),
             Note = trimmed,
         };
-        CheckAndMark(MarkedRecord.Decline, row.Id, acknowledgement, (EntryLimit.Pay, offer.Pay.Value));
+        CheckAndMark(MarkedRecord.Decline, row.Id, acknowledgement, OfferChecks(offer));
         db.Declines.Add(row);
         db.SaveChanges();
         return row.Id;
@@ -274,7 +293,8 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             d.Items,
             new(d.EstimatedMinutes, d.EstimatedMinutesGrade),
             d.OfferedAt,
-            d.ReturnMilesOverride);
+            d.ReturnMilesOverride,
+            d.PromisedTip is { } promised ? new Graded<decimal>(promised, d.PromisedTipGrade!.Value) : null);
         var assumptions = d.ForecastAssumptions
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Split(": ", 2))
@@ -326,15 +346,17 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
             t.Items,
             new(t.EstimatedMinutes, t.EstimatedMinutesGrade),
             t.OfferedAt,
-            t.ReturnMilesOverride);
+            t.ReturnMilesOverride,
+            t.PromisedTip is { } promised ? new Graded<decimal>(promised, t.PromisedTipGrade!.Value) : null);
         var a = FindActuals(t.Id);
         var actuals = a is null ? null : new GradedActuals(
             new(a.ElapsedMinutes, a.ElapsedMinutesGrade),
             new(a.RouteMiles, a.RouteMilesGrade),
             new(a.ReturnMiles, a.ReturnMilesGrade));
-        var tip = FindTip(t.Id);
-        return new StoredTrip(t.Id, t.ShiftId, offer, t.AcceptedAt, actuals,
-            tip is null ? null : new Graded<decimal>(tip.Amount, tip.AmountGrade));
+        // FR-6: every posted tip, summed; null when none has posted.
+        var tips = db.Tips.AsNoTracking().Where(x => x.TripId == t.Id).ToList();
+        var posted = tips.Count == 0 ? (Graded<decimal>?)null : new Graded<decimal>(tips.Sum(x => x.Amount), Grade.Stated);
+        return new StoredTrip(t.Id, t.ShiftId, offer, t.AcceptedAt, actuals, posted, db.TipsIn.Any(x => x.TripId == t.Id));
     }
 
     // ---- Shifts ----
@@ -415,7 +437,9 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
         {
             var a = FindActuals(t.Id)
                 ?? throw new InvalidOperationException($"Trip {t.Id} has no actuals; the shift cannot be summarized yet.");
-            trips.Add(new TripRecord(t.Pay, new TripActuals(a.ElapsedMinutes, a.RouteMiles, a.ReturnMiles), FindTip(t.Id)?.Amount ?? 0m));
+            // SDD 6.11: the base and the tip counted in gross, so a posted tip is never added on top of pay.
+            var tip = ToStored(t).Tips;
+            trips.Add(new TripRecord(tip.Base, new TripActuals(a.ElapsedMinutes, a.RouteMiles, a.ReturnMiles), tip.Counted));
         }
 
         var minutes = (int)Math.Round((close.EndedAt - shift.StartedAt).TotalMinutes);
@@ -446,6 +470,9 @@ public sealed partial class LedgerServices(LedgerContext db, TimeProvider clock)
     private TripActualsRow? FindActuals(Guid tripId) =>
         Current(db.TripActuals.AsNoTracking().Where(a => a.TripId == tripId)).SingleOrDefault();
 
-    private TipRow? FindTip(Guid tripId) =>
-        db.Tips.SingleOrDefault(t => t.TripId == tripId);
+    /// <summary>The values an offer is checked on at accept or decline: pay, and the promised tip if any.</summary>
+    private static (EntryLimit, decimal)[] OfferChecks(Offer offer) =>
+        offer.PromisedTip is { } promised
+            ? [(EntryLimit.Pay, offer.Pay.Value), (EntryLimit.Tip, promised.Value)]
+            : [(EntryLimit.Pay, offer.Pay.Value)];
 }

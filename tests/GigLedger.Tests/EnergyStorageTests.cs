@@ -163,21 +163,23 @@ public sealed class EnergyStorageTests : IDisposable
 
     // ---- FR-6, FR-17: tips ----
 
-    private Guid FinishedTrip()
+    private Guid FinishedTrip(decimal? promisedTip = null)
     {
         var shift = Shifts.Start("Spark", Now, new(17_000m, Grade.Measured));
-        var trip = _ledger.Accept(shift, Run4Offer(Now), Now);
+        var offer = Run4Offer(Now) with { PromisedTip = promisedTip is { } p ? new Graded<decimal>(p, Grade.Stated) : null };
+        var trip = _ledger.Accept(shift, offer, Now);
         Trips.RecordActuals(trip, Run4Actuals);
         return trip;
     }
 
     [Fact]
-    public void FR6_ATipIsRecordedOncePerTrip()
+    public void FR6_PostedTipsOnATripAreSummed()
     {
+        // SRS 0.8 reversed "one tip per trip": a tip can post in pieces.
         var trip = FinishedTrip();
         Trips.RecordTip(trip, 6.00m, Now.AddHours(12));
-        Assert.Equal(new Graded<decimal>(6.00m, Grade.Stated), Trips.Get(trip).Tip);
-        Assert.Throws<InvalidOperationException>(() => Trips.RecordTip(trip, 1.00m, Now.AddHours(13)));
+        Trips.RecordTip(trip, 1.00m, Now.AddHours(13));
+        Assert.Equal(new Graded<decimal>(7.00m, Grade.Stated), Trips.Get(trip).Tip);
     }
 
     [Fact]
@@ -195,11 +197,13 @@ public sealed class EnergyStorageTests : IDisposable
     [Fact]
     public void FR17_TheTripReportShowsRatesBeforeAndAfterTheTip()
     {
-        var trip = FinishedTrip();
+        // SRS 0.8: on a tracked trip, "before the tip" is the base (pay minus the promised tip).
+        var trip = FinishedTrip(promisedTip: 6.00m);
         Trips.RecordTip(trip, 6.00m, Now.AddHours(12));
+        Trips.MarkAllTipsIn(trip, Now.AddDays(2));
         var report = Trips.Report(trip);
 
-        var expected = EnergyCalculations.TripRates(34.89m, 6.00m, Run4Actuals.Values, report.Energy);
+        var expected = EnergyCalculations.TripRates(28.89m, 6.00m, Run4Actuals.Values, report.Energy);
         Assert.Equal(expected.GrossPerHourBeforeTip.Value, report.Rates!.GrossPerHourBeforeTip.Value);
         Assert.Equal(expected.GrossPerHour.Value, report.Rates.GrossPerHour.Value);
         Assert.Equal(expected.NetPerHour.Value, report.Rates.NetPerHour.Value);
@@ -224,12 +228,14 @@ public sealed class EnergyStorageTests : IDisposable
     [Fact]
     public void FR17_TheShiftSummaryIncludesTips()
     {
-        var trip = FinishedTrip();
+        // SRS 0.8: the tip is inside the pay. A tracked trip, all in: gross = base + posted.
+        var trip = FinishedTrip(promisedTip: 6.00m);
         Trips.RecordTip(trip, 6.00m, Now.AddHours(12));
+        Trips.MarkAllTipsIn(trip, Now.AddDays(2));
         var shift = Trips.Get(trip).ShiftId;
         Shifts.End(shift, Now.AddMinutes(90), new(17_012.1m, Grade.Measured));
         var summary = Shifts.Summary(shift);
-        Assert.Equal(40.89m, summary.Gross);
+        Assert.Equal(34.89m, summary.Gross);
         Assert.Equal(6.00m, summary.Tips);
     }
 

@@ -47,6 +47,16 @@ public sealed class TripRow : LedgerRecord
     public DateTimeOffset OfferedAt { get; set; }
     public decimal? ReturnMilesOverride { get; set; }
     public DateTimeOffset AcceptedAt { get; set; }
+    /// <summary>FR-6a: the tip inside the pay; null when untracked.</summary>
+    public decimal? PromisedTip { get; set; }
+    public Grade? PromisedTipGrade { get; set; }
+}
+
+/// <summary>FR-6a: the moment a trip's tips were marked final.</summary>
+public sealed class TipsInRow : LedgerRecord
+{
+    public Guid TripId { get; set; }
+    public DateTimeOffset At { get; set; }
 }
 
 /// <summary>A declined offer (FR-2a, SDD 6.9): the offer as presented, the forecast then, and why.</summary>
@@ -63,6 +73,8 @@ public sealed class DeclineRow : LedgerRecord
     public Grade EstimatedMinutesGrade { get; set; }
     public DateTimeOffset OfferedAt { get; set; }
     public decimal? ReturnMilesOverride { get; set; }
+    public decimal? PromisedTip { get; set; }
+    public Grade? PromisedTipGrade { get; set; }
     public DateTimeOffset DeclinedAt { get; set; }
     public decimal ForecastNetPerHour { get; set; }
     /// <summary>What the forecast rested on, one "input: source" per line; empty when nothing (NFR-2).</summary>
@@ -119,6 +131,8 @@ public sealed class SettingsRow : LedgerRecord
     public decimal AcceptThreshold { get; set; }
     public decimal DefaultMilesPerKwh { get; set; }
     public decimal DefaultPricePerKwh { get; set; }
+    /// <summary>FR-6a, SRS 0.8. False on every version stored before it existed.</summary>
+    public bool TrackTips { get; set; }
 }
 
 public sealed class ChargeSessionRow : LedgerRecord

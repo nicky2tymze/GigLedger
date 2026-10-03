@@ -1,6 +1,6 @@
 # GigLedger: Software Design Document
 
-**Version:** 0.8 · 2026-10-03 · DRAFT. Designs against SRS 0.7. 0.8 adds section 6.10, entry checks (Slice 4, story 2). 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
+**Version:** 0.9 · 2026-10-03 · DRAFT. Designs against SRS 0.8. 0.9 adds section 6.11, tip tracking, and replaces the tip rule in 6.5 (Slice 4, story 3). 0.8 adds section 6.10, entry checks (Slice 4, story 2). 0.7 adds section 6.9, declines with reasons and accept starting a shift (Slice 4, story 1). 0.6 corrects section 3, which described TC-34 as a check on money types; the test forbids all multiplication and division in Web. 0.5 orders efficiency by time, allows unknown odometer and state of charge (6.5), adds the charge import (6.7) and the payout import (6.8), and takes recorded payouts from one source per platform and year (6.6). 0.4 adds section 6.6, reports and the tax summary (Slice 3b). 0.3 added section 6.5, the Slice 2 energy design. 0.2 recorded the three section 11 decisions.
 **Author:** Dominick Trolian
 **Stack:** C# / .NET 8 · ASP.NET Core · Blazor (interactive server) · EF Core + SQLite · xUnit
 
@@ -191,8 +191,8 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
 - **The window (FR-9a).** For a shift, the sessions in the 30 days before it started. Measured
   efficiency and blended price replace the defaults wherever they exist; whichever is missing
   stays the default and is named.
-- **Tips (FR-6, FR-17).** One tip per trip, the whole trip's tip. A trip's rates are reported
-  before and after its tip, and a shift's gross includes tips with the tip total shown.
+- **Tips (FR-6, FR-17).** Replaced in 0.9 by section 6.11: pay already holds the tip, so a posted tip
+  is never added on top of it.
 - **Estimate error (FR-16).** Actual minutes − the platform's estimate, and actual route miles −
   stated miles. Positive means the platform understated.
 
@@ -338,6 +338,37 @@ Evaluating an offer stores nothing. Only accepting does (FR-2).
   explanation box and **Record with this explanation** for a document level. The held offer of FR-2b
   carries its acknowledgement to the shift page. Reports: an explained-values table for the range.
   Marks are not yet shown beside each record on screen (the API lists them); deferred.
+
+### 6.11 Tip tracking (Slice 4, story 3: FR-1, FR-6, FR-6a, FR-17, FR-31)
+
+- **The offer.** `Offer` gains an optional `PromisedTip` (graded, stated). Pay stays the total shown.
+  `Trips` and `Declines` gain the two columns. **Refused:** a negative promised tip, or one larger
+  than the pay. At accept the promised tip is checked against the tip limit with the pay (6.10).
+- **Posted tips.** `RecordTip` no longer refuses a second tip: a trip has zero or more `Tips` rows,
+  summed. A negative tip is still refused (a lowered tip just posts smaller). Each is checked against
+  the tip limit.
+- **All tips in.** A new append-only table, `TipsIn` (trip, time), triggers in their own migration.
+  `ITripService.MarkAllTipsIn(tripId, at)` is refused on an untracked trip, a second time, or before
+  `TipAccounting.AllTipsInOpensAt` (accept time plus actual minutes, or the accept time with no
+  actuals yet, plus 24 hours). A tip recorded afterwards is accepted; everything is computed from the
+  rows, so nothing needs updating.
+- **The arithmetic.** `TipAccounting.State(pay, promised, postedSum, allIn)` returns the trip's base,
+  the tip counted in its gross, whether it is pending, and the adjustment:
+  untracked: base = pay, counted = 0 · tracked, pending: base = pay − promised, counted = promised ·
+  tracked, all in: base = pay − promised, counted = posted, adjustment = posted − promised.
+  Gross = base + counted. **Every existing consumer is fed base and counted in place of pay and
+  tip:** `TripRates` (FR-17: "before tip" is the base), `TripRecord` in the shift summary (its Tips
+  line is now the tips counted in gross), and so the reports. No calculation is duplicated.
+- **Tax months (FR-31, no import).** Untracked or pending: the gross in the month accepted. All in:
+  the base in the month accepted and each posted tip in the month it posted.
+- **The setting.** `Settings` gains `TrackTips` (default off), stored with the other settings as a
+  new version. It changes the screens only: the services accept a promised tip either way.
+- **Interfaces.** `POST /api/trips/{id}/tips-in` (`MarkAllTipsIn`); `GET` and `POST /api/settings`.
+  `StoredTrip` gains `PromisedTip`, `AllTipsIn`, and the computed tip state.
+- **Screens.** A Settings page with the **Track tips** switch. With it on, the Offer page has a
+  **Promised tip** field ("open the offer to see it"). The Shift page shows a tracked trip's tip as
+  *pending* or *all in* with the adjustment, records posted tips at any time, and shows **All tips
+  in** only once it opens.
 
 ### 6.4 Guards
 
