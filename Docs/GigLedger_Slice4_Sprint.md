@@ -26,6 +26,10 @@ it is worked in.
 
 ## Open questions
 
+0. **Story 1 reverses a recorded decision.** SRS 0.2 says it "closed the four open questions: ... no
+   declined offers ...". Declining with reasons is the newer call; the SRS change must state that it
+   reverses 0.2's decision and why, not only add a requirement.
+
 1. **The decline reasons.** Draft list: heavy item (40 lb+), alcohol, stairs (3rd floor+, no
    elevator), pay too low, too far / long return, too many drops, too many items, apartment complex,
    bad area or road, low charge / range, ending the shift, other (with a note).
