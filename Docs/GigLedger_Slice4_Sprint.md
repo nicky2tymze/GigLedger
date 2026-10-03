@@ -137,4 +137,7 @@ At close: what this slice did badly.
   (no reason while the shift is open) or changed (reason required), and adding it after the shift closed
   needs a reason too. SRS 0.9, SDD 0.10. 13 tests first, all failed; suite 400 passed.
 - 2026-10-03: **Story 3 ACCEPTED (the Architect)** after the live check and the changes above.
-- 2026-10-03: Cash tips taken off the backlog (the Architect: "YAGNI").
+- 2026-10-03: **Cash tips: not built now; a future enhancement.** The Architect's reason, in his words:
+  the decision rests on *"the insignificance of cash tipping in this game, not to avoid taxes."* Cash tips
+  are rare in delivery driving. YAGNI for this slice; *"it will probably be implemented in some form at
+  some time."*
