@@ -136,6 +136,5 @@ At close: what this slice did badly.
   field is optional; unused, the whole pay counts as the fee. The promised tip can be added after accept
   (no reason while the shift is open) or changed (reason required), and adding it after the shift closed
   needs a reason too. SRS 0.9, SDD 0.10. 13 tests first, all failed; suite 400 passed.
-- **Backlog, not built (his):** cash tips. He will not record the few he gets; other drivers might want
-  them. Raised here so the idea is not lost.
 - 2026-10-03: **Story 3 ACCEPTED (the Architect)** after the live check and the changes above.
+- 2026-10-03: Cash tips taken off the backlog (the Architect: "YAGNI").
